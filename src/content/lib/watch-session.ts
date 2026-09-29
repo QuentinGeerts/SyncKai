@@ -7,8 +7,8 @@ import { createLogger } from './logger';
 import { trackVideoProgress } from './video-tracker';
 import { waitFor } from './wait-for';
 
-/** 85 % : le générique de fin commence parfois avant 90 % (générique + aperçu ≈ 2-3 min sur 24 min) */
-const COMPLETION_THRESHOLD = 0.85;
+/** Repli quand le début du générique de fin est inconnu (générique + aperçu ≈ 2-3 min sur 24 min) */
+const FALLBACK_COMPLETION_RATIO = 0.85;
 const MIN_EPISODE_DURATION_S = 120;
 const VIDEO_WAIT_TIMEOUT_MS = 30_000;
 const METADATA_WAIT_TIMEOUT_MS = 15_000;
@@ -47,6 +47,8 @@ export function startWatchSession(adapter: StreamingAdapter, episodeId: string):
   let completionReported = false;
   /** Métadonnées obtenues au démarrage, en réserve si la relecture échoue à la complétion */
   let metadata: EpisodeInfo | null = null;
+  /** Début du générique de fin, renseigné dès que la plateforme répond */
+  let creditsStart: number | null = null;
 
   log.info(`▶ Page de lecture détectée (${adapter.platform}, épisode ${episodeId})`);
 
@@ -112,9 +114,10 @@ export function startWatchSession(adapter: StreamingAdapter, episodeId: string):
     log.info('Lecteur vidéo trouvé :', video.id || '(sans id)');
 
     trackVideoProgress(video, {
-      threshold: COMPLETION_THRESHOLD,
+      fallbackRatio: FALLBACK_COMPLETION_RATIO,
+      getCreditsStart: () => creditsStart,
       minDurationSeconds: MIN_EPISODE_DURATION_S,
-      onThresholdReached: () => void reportCompletion(),
+      onCompleted: () => void reportCompletion(),
       signal,
       logger: log,
     });
@@ -122,6 +125,9 @@ export function startWatchSession(adapter: StreamingAdapter, episodeId: string):
 
   void waitForMetadata();
   void waitForVideo();
+  void adapter.getCreditsStart?.(episodeId, signal).then((start) => {
+    creditsStart = start;
+  });
 
   return { episodeId, destroy };
 }

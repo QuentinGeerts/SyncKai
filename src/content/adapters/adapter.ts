@@ -18,4 +18,10 @@ export interface StreamingAdapter {
 
   /** Retourne l'élément <video> du lecteur s'il est présent */
   findVideo(): HTMLVideoElement | null;
+
+  /**
+   * Début du générique de fin (s) si la plateforme le fournit, sinon null.
+   * Optionnel : sans implémentation, la complétion se fait au seuil de repli.
+   */
+  getCreditsStart?(episodeId: string, signal: AbortSignal): Promise<number | null>;
 }

@@ -1,48 +1,63 @@
+import { formatTimecode, resolveCompletionPoint } from './completion';
 import type { Logger } from './logger';
 
 interface VideoTrackerOptions {
-  /** Seuil de complétion entre 0 et 1 (ex : 0.9) */
-  threshold: number;
+  /** Seuil de repli (0 à 1) si le début du générique de fin est inconnu */
+  fallbackRatio: number;
+  /** Début du générique de fin (s), lu à chaque tick : la donnée peut arriver après le démarrage */
+  getCreditsStart: () => number | null;
   /** Durée minimale (s) pour considérer la vidéo comme un épisode : ignore pubs et bandes-annonces */
   minDurationSeconds: number;
-  onThresholdReached: () => void;
+  onCompleted: () => void;
   /** Annuler ce signal retire tous les écouteurs posés sur la vidéo */
   signal: AbortSignal;
   logger: Logger;
 }
 
 /**
- * Suit la progression d'une <video> et déclenche `onThresholdReached` une seule fois par source.
- * Le listener `timeupdate` (~4 appels/s) est retiré dès le seuil atteint, puis réarmé
+ * Suit la progression d'une <video> et déclenche `onCompleted` une seule fois par source,
+ * au début du générique de fin (ou au seuil de repli).
+ * Le listener `timeupdate` (~4 appels/s) est retiré dès la complétion, puis réarmé
  * si le lecteur charge une nouvelle source (`loadstart`, ex : épisode suivant en autoplay).
  */
 export function trackVideoProgress(video: HTMLVideoElement, options: VideoTrackerOptions): void {
-  const { threshold, minDurationSeconds, onThresholdReached, signal, logger } = options;
+  const { fallbackRatio, getCreditsStart, minDurationSeconds, onCompleted, signal, logger } = options;
   let progressController: AbortController | null = null;
   let lastLoggedDecile = -1;
+  let lastLoggedPoint = '';
 
   const onTimeUpdate = (): void => {
     const { currentTime, duration } = video;
     if (!Number.isFinite(duration) || duration <= 0) return; // Métadonnées pas encore chargées
     if (duration < minDurationSeconds) return; // Pub ou vidéo trop courte pour être un épisode
 
-    const progress = currentTime / duration;
-    const decile = Math.floor(progress * 10);
-    if (decile !== lastLoggedDecile) {
-      lastLoggedDecile = decile;
-      logger.info(`Progression : ${Math.round(progress * 100)} %`);
+    const point = resolveCompletionPoint(duration, getCreditsStart(), fallbackRatio);
+    const pointLabel =
+      point.source === 'credits'
+        ? `générique de fin à ${formatTimecode(point.seconds)}`
+        : `${Math.round(fallbackRatio * 100)} % (${formatTimecode(point.seconds)}, pas de données de générique)`;
+    if (pointLabel !== lastLoggedPoint) {
+      lastLoggedPoint = pointLabel;
+      logger.info(`Fin d’épisode : ${pointLabel}`);
     }
 
-    if (progress >= threshold) {
-      logger.info(`Seuil de ${threshold * 100} % franchi`);
+    const decile = Math.floor((currentTime / duration) * 10);
+    if (decile !== lastLoggedDecile) {
+      lastLoggedDecile = decile;
+      logger.info(`Progression : ${Math.round((currentTime / duration) * 100)} % (${formatTimecode(currentTime)})`);
+    }
+
+    if (currentTime >= point.seconds) {
+      logger.info(`Fin d’épisode atteinte (${pointLabel})`);
       disarm();
-      onThresholdReached();
+      onCompleted();
     }
   };
 
   const arm = (): void => {
     disarm();
     lastLoggedDecile = -1;
+    lastLoggedPoint = '';
     progressController = new AbortController();
     // Le signal combiné garantit le nettoyage même si la session est détruite
     const combined = AbortSignal.any([signal, progressController.signal]);

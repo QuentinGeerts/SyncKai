@@ -21,6 +21,9 @@ const SERIES_PATH_REGEX = /\/series\/([A-Z0-9]+)(?:\/([^/?#]+))?/i;
  */
 const EPISODE_LABEL_REGEX = /(?:^|\|)\s*E(\d+(?:\.\d+)?)\s*[-–—]\s*(.+)$/;
 
+/** Horodatages intro / générique de fin par épisode (même source que le lecteur Crunchyroll) */
+const SKIP_EVENTS_URL = 'https://static.crunchyroll.com/skip-events/production';
+
 // ⚠️ Sélecteurs DOM (repli si le JSON-LD est absent) à valider sur le site réel :
 // Crunchyroll modifie régulièrement ses classes CSS ; les attributs data-t sont plus stables.
 const SELECTORS = {
@@ -178,5 +181,28 @@ export const crunchyrollAdapter: StreamingAdapter = {
 
   findVideo() {
     return document.querySelector<HTMLVideoElement>(SELECTORS.video);
+  },
+
+  /**
+   * Horodatages "skip events" (ceux du bouton "Passer le générique"). Structure vérifiée le 2026-09-29 :
+   * { intro: { start: 111, end: 199 }, credits: { start: 1344, end: 1437 }, mediaId: "GE00374365JAJP" }
+   * Absent pour certains épisodes (404) : le tracker se replie alors sur le pourcentage.
+   */
+  async getCreditsStart(episodeId, signal) {
+    const url = `${SKIP_EVENTS_URL}/${encodeURIComponent(episodeId)}.json`;
+    try {
+      const response = await fetch(url, { signal, credentials: 'omit' });
+      if (!response.ok) {
+        log.info(`Pas de données de générique pour cet épisode (HTTP ${response.status})`);
+        return null;
+      }
+      const data: unknown = await response.json();
+      const start = isRecord(data) && isRecord(data.credits) ? toNumber(data.credits.start) : null;
+      log.info(start !== null ? `Générique de fin annoncé à ${start} s` : 'Données de générique sans début de générique de fin');
+      return start;
+    } catch (error: unknown) {
+      if (!signal.aborted) log.warn('Données de générique indisponibles :', error);
+      return null;
+    }
   },
 };
