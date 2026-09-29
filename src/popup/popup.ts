@@ -58,7 +58,7 @@ function render(state: PopupState): void {
 async function refreshViewer(): Promise<void> {
   let result: ViewerResult;
   try {
-    result = await sendMessage('GET_VIEWER');
+    result = await sendMessage('GET_VIEWER', null);
   } catch (error: unknown) {
     console.error('[SyncKai] Service worker injoignable :', error);
     result = { ok: false, code: 'NETWORK', message: SW_UNREACHABLE };
@@ -79,7 +79,7 @@ async function handleLogin(): Promise<void> {
 
   let result: AuthResult;
   try {
-    result = await sendMessage('LOGIN_ANILIST');
+    result = await sendMessage('LOGIN_ANILIST', null);
   } catch (error: unknown) {
     console.error('[SyncKai] Service worker injoignable :', error);
     result = { ok: false, code: 'UNKNOWN', message: SW_UNREACHABLE };
