@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "SyncKai",
+  "version": "1.0.0",
+  "description": "Synchronise automatiquement tes animes vers AniList.",
+  "permissions": [
+    "storage",
+    "identity"
+  ],
+  "host_permissions": [
+    "*://*.crunchyroll.com/*"
+  ],
+  "background": {
+    "service_worker": "src/background/background.ts",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.crunchyroll.com/*"
+      ],
+      "js": [
+        "src/content/content.ts"
+      ]
+    }
+  ],
+  "action": {
+    "default_popup": "src/popup/popup.html"
+  }
+}
