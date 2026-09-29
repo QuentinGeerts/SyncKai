@@ -1,106 +1,151 @@
-import { ANILIST_TOKEN_KEY, isAniListToken, type AuthResult, type RuntimeMessage } from '../shared/types';
+import { isAniListViewer, type ViewerErrorCode, type ViewerResult } from '../shared/anilist.types';
+import type { AuthResult } from '../shared/auth.types';
+import { sendMessage } from '../shared/messages';
+import { clearAniListSession, getCachedViewer, getValidToken, STORAGE_KEYS } from '../shared/storage';
+import { renderAlert } from './components/alert';
+import { renderFooter } from './components/footer';
+import { renderHeader } from './components/header';
+import { renderLoginCard } from './components/login-card';
+import { renderProfileCard } from './components/profile-card';
+import { h, type Child } from './lib/dom';
+import { createStore, type PopupState } from './state';
 
-console.log('Popup chargé');
+const SW_UNREACHABLE = 'Impossible de contacter l’extension. Réessaie.';
+/** Erreurs qui invalident la session : retour à l'écran de connexion */
+const AUTH_ERRORS: ReadonlySet<ViewerErrorCode> = new Set(['NOT_AUTHENTICATED', 'TOKEN_INVALID']);
 
-function getEl<T extends Element>(selector: string): T {
-  const el = document.querySelector<T>(selector);
-  if (!el) throw new Error(`Élément introuvable : ${selector}`);
+function getRoot(): HTMLDivElement {
+  const el = document.querySelector<HTMLDivElement>('#app');
+  if (!el) throw new Error('Élément #app introuvable');
   return el;
 }
 
-const loggedOutView = getEl<HTMLElement>('#logged-out-view');
-const loggedInView = getEl<HTMLElement>('#logged-in-view');
-const loginBtn = getEl<HTMLButtonElement>('#login-btn');
-const logoutBtn = getEl<HTMLButtonElement>('#logout-btn');
-const loginSpinner = getEl<SVGSVGElement>('#login-spinner');
-const loginLabel = getEl<HTMLSpanElement>('#login-label');
-const errorBox = getEl<HTMLParagraphElement>('#error-box');
-const statusDot = getEl<HTMLSpanElement>('#status-dot');
-const statusLabel = getEl<HTMLSpanElement>('#status-label');
+const root = getRoot();
 
-function renderAuthState(connected: boolean): void {
-  loggedInView.classList.toggle('hidden', !connected);
-  loggedInView.classList.toggle('flex', connected);
-  loggedOutView.classList.toggle('hidden', connected);
-  loggedOutView.classList.toggle('flex', !connected);
-  statusDot.classList.toggle('bg-emerald-500', connected);
-  statusDot.classList.toggle('bg-red-500', !connected);
-  statusDot.classList.remove('bg-zinc-500');
-  statusLabel.textContent = connected ? 'Connecté' : 'Déconnecté';
+const store = createStore({ status: 'loading' });
+const version = chrome.runtime.getManifest().version;
+
+// ─── Rendu ────────────────────────────────────────────────────────────────
+
+function renderMain(state: PopupState): Child[] {
+  switch (state.status) {
+    case 'loading':
+      return [];
+    case 'logged-out':
+      return [
+        renderLoginCard({ pending: state.pending, onLogin: () => void handleLogin() }),
+        state.error && renderAlert({ message: state.error }),
+      ];
+    case 'logged-in':
+      return [
+        renderProfileCard(state.viewer),
+        state.error && renderAlert({ message: state.error, action: { label: 'Réessayer', onClick: () => void refreshViewer() } }),
+      ];
+  }
 }
 
-function setLoading(loading: boolean): void {
-  loginBtn.disabled = loading;
-  loginSpinner.classList.toggle('hidden', !loading);
-  loginLabel.textContent = loading ? 'Connexion…' : 'Se connecter à AniList';
+function render(state: PopupState): void {
+  root.replaceChildren(
+    renderHeader(state),
+    h('main', { class: 'flex min-h-[88px] flex-col gap-3 px-4 py-4' }, ...renderMain(state)),
+    renderFooter({ version, onLogout: state.status === 'logged-in' ? () => void handleLogout() : undefined }),
+  );
 }
 
-function showError(message: string | null): void {
-  errorBox.textContent = message ?? '';
-  errorBox.classList.toggle('hidden', message === null);
-}
+// ─── Actions ──────────────────────────────────────────────────────────────
 
-async function hasValidToken(): Promise<boolean> {
-  const stored = await chrome.storage.local.get(ANILIST_TOKEN_KEY);
-  const token: unknown = stored[ANILIST_TOKEN_KEY];
-  return isAniListToken(token) && token.expiresAt > Date.now();
+/** Rafraîchit le profil depuis l'API (stale-while-revalidate : le cache reste affiché). */
+async function refreshViewer(): Promise<void> {
+  let result: ViewerResult;
+  try {
+    result = await sendMessage('GET_VIEWER');
+  } catch (error: unknown) {
+    console.error('[SyncKai] Service worker injoignable :', error);
+    result = { ok: false, code: 'NETWORK', message: SW_UNREACHABLE };
+  }
+
+  if (!result.ok && AUTH_ERRORS.has(result.code)) {
+    store.set({ status: 'logged-out', pending: false, error: result.message });
+    return;
+  }
+
+  const current = store.get();
+  if (current.status !== 'logged-in') return; // Déconnecté entre-temps
+  store.set(result.ok ? { ...current, viewer: result.data, error: null } : { ...current, error: result.message });
 }
 
 async function handleLogin(): Promise<void> {
-  showError(null);
-  setLoading(true);
+  store.set({ status: 'logged-out', pending: true, error: null });
+
+  let result: AuthResult;
   try {
-    const message: RuntimeMessage = { type: 'LOGIN_ANILIST' };
-    const result: AuthResult = await chrome.runtime.sendMessage(message);
-    if (result.success) {
-      renderAuthState(true);
-    } else {
-      console.warn('[SyncKai] Échec de connexion :', result.code, result.message);
-      showError(result.message);
-    }
+    result = await sendMessage('LOGIN_ANILIST');
   } catch (error: unknown) {
     console.error('[SyncKai] Service worker injoignable :', error);
-    showError('Impossible de contacter l’extension. Réessaie.');
-  } finally {
-    setLoading(false);
+    result = { ok: false, code: 'UNKNOWN', message: SW_UNREACHABLE };
   }
+
+  if (!result.ok) {
+    console.warn('[SyncKai] Échec de connexion :', result.code, result.message);
+    store.set({ status: 'logged-out', pending: false, error: result.message });
+    return;
+  }
+
+  // Le service worker a déjà préchargé le profil après l'OAuth
+  const viewer = await getCachedViewer();
+  store.set({ status: 'logged-in', viewer, error: null });
+  if (!viewer) await refreshViewer();
 }
 
-// Déconnexion locale : AniList (Implicit Grant) n'expose pas d'endpoint de révocation,
-// on supprime donc simplement le token stocké. Pas besoin de réveiller le service worker.
 async function handleLogout(): Promise<void> {
-  showError(null);
-  logoutBtn.disabled = true;
   try {
-    await chrome.storage.local.remove(ANILIST_TOKEN_KEY);
-    renderAuthState(false);
+    await clearAniListSession();
+    store.set({ status: 'logged-out', pending: false, error: null });
   } catch (error: unknown) {
     console.error('[SyncKai] Échec de la déconnexion :', error);
-    showError('Impossible de se déconnecter. Réessaie.');
-  } finally {
-    logoutBtn.disabled = false;
+    const current = store.get();
+    if (current.status === 'logged-in') store.set({ ...current, error: 'Impossible de se déconnecter. Réessaie.' });
   }
 }
 
-loginBtn.addEventListener('click', (): void => {
-  void handleLogin();
-});
+async function bootstrap(): Promise<void> {
+  try {
+    if (!(await getValidToken())) {
+      store.set({ status: 'logged-out', pending: false, error: null });
+      return;
+    }
+    store.set({ status: 'logged-in', viewer: await getCachedViewer(), error: null });
+    await refreshViewer();
+  } catch (error: unknown) {
+    console.error('[SyncKai] Lecture du stockage impossible :', error);
+    store.set({ status: 'logged-out', pending: false, error: 'Impossible de lire la session.' });
+  }
+}
 
-logoutBtn.addEventListener('click', (): void => {
-  void handleLogout();
-});
+// ─── Synchronisation avec le stockage ──────────────────────────────────────
+// La popup se ferme souvent pendant l'OAuth, et le service worker peut invalider la session :
+// on suit donc les changements du stockage plutôt que de se fier aux seules réponses.
 
-// La popup peut se fermer pendant le flux OAuth : on réagit aussi aux changements de stockage
 chrome.storage.onChanged.addListener((changes, areaName): void => {
-  if (areaName === 'local' && ANILIST_TOKEN_KEY in changes) {
-    void hasValidToken().then(renderAuthState);
+  if (areaName !== 'local') return;
+
+  const tokenChange = changes[STORAGE_KEYS.anilistToken];
+  if (tokenChange) {
+    const state = store.get();
+    const hasToken = tokenChange.newValue !== undefined;
+    if (!hasToken && state.status === 'logged-in') {
+      store.set({ status: 'logged-out', pending: false, error: null });
+    } else if (hasToken && state.status === 'logged-out' && !state.pending) {
+      void bootstrap();
+    }
+  }
+
+  const viewerChange = changes[STORAGE_KEYS.anilistViewer];
+  const state = store.get();
+  if (viewerChange && state.status === 'logged-in' && isAniListViewer(viewerChange.newValue)) {
+    store.set({ ...state, viewer: viewerChange.newValue });
   }
 });
 
-void hasValidToken()
-  .then(renderAuthState)
-  .catch((error: unknown): void => {
-    console.error('[SyncKai] Lecture du stockage impossible :', error);
-    renderAuthState(false);
-    showError('Impossible de lire la session.');
-  });
+store.subscribe(render);
+void bootstrap();

@@ -9,7 +9,8 @@
     "identity"
   ],
   "host_permissions": [
-    "*://*.crunchyroll.com/*"
+    "*://*.crunchyroll.com/*",
+    "https://graphql.anilist.co/*"
   ],
   "background": {
     "service_worker": "src/background/background.ts",
