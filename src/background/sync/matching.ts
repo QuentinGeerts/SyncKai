@@ -106,9 +106,9 @@ function walkSeasons(seasons: MediaCandidate[], startIndex: number, episode: num
   let remaining = episode;
   for (let i = startIndex; i < seasons.length; i++) {
     const { episodes } = seasons[i];
-    // Nombre d'épisodes inconnu : seulement acceptable pour la dernière saison (en cours de diffusion)
-    if (episodes === null) return i === seasons.length - 1 ? { index: i, progress: remaining } : null;
-    if (remaining <= episodes) return { index: i, progress: remaining };
+    // Nombre d'épisodes inconnu = saison en cours de diffusion (ex : One Piece) : elle absorbe le reste,
+    // même si des fiches plus récentes existent (saison annoncée, refonte "Log" liée à la même série…)
+    if (episodes === null || remaining <= episodes) return { index: i, progress: remaining };
     remaining -= episodes;
   }
   return null;

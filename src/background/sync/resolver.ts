@@ -97,7 +97,16 @@ export async function resolveEpisode(episode: EpisodeInfo): Promise<ResolveResul
     await deleteMediaMapping(key);
   }
 
-  const result = resolveTarget(episode, await collectCandidates(episode));
+  const candidates = await collectCandidates(episode);
+  // Diagnostic : fiches retenues comme appartenant à la série (les autres résultats de recherche sont omis)
+  console.info(
+    '[SyncKai:sync] Fiches liées :',
+    candidates
+      .filter((c) => c.link !== null)
+      .map((c) => `#${c.id} ${c.format ?? '?'} ${c.episodes ?? '?'} ép. ${c.startDate ?? '?'} « ${c.titles[0] ?? '?'} » (${c.link})`),
+  );
+
+  const result = resolveTarget(episode, candidates);
   if (result.ok && result.target.confidence === 'high') {
     const { mediaId, numbering, offset, episodes } = result.target;
     await saveMediaMapping(key, { mediaId, numbering, offset, episodes });

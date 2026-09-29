@@ -71,6 +71,29 @@ describe('resolveTarget', () => {
     expect(result).toMatchObject({ ok: true, target: { mediaId: 21, progress: 1180, numbering: 'displayed', offset: 0, confidence: 'high' } });
   });
 
+  it('One Piece : fiche en cours + fiche dérivée liée à la même série (régression)', () => {
+    const result = resolveTarget(
+      episode({ animeTitle: 'One Piece', seasonTitle: 'Elbaph', seasonNumber: 24, seasonEpisodeNumber: 25, displayedEpisodeNumber: 1180 }),
+      [
+        candidate({ id: 180000, episodes: 21, startDate: 20240407, titles: ['ONE PIECE Log: Fish-Man Island Saga'] }),
+        candidate({ id: 21, episodes: null, startDate: 19991020, titles: ['ONE PIECE'] }),
+      ],
+    );
+    expect(result).toMatchObject({ ok: true, target: { mediaId: 21, progress: 1180, numbering: 'displayed', offset: 0, confidence: 'high' } });
+  });
+
+  it('numérotation absolue avec une saison en cours au milieu de la franchise (S3 annoncée)', () => {
+    const result = resolveTarget(
+      episode({ seasonNumber: 2, seasonEpisodeNumber: 5, displayedEpisodeNumber: 30 }),
+      [
+        candidate({ id: 1, episodes: 25, startDate: 20200101 }),
+        candidate({ id: 2, episodes: null, startDate: 20210101 }),
+        candidate({ id: 3, episodes: null, startDate: null }),
+      ],
+    );
+    expect(result).toMatchObject({ ok: true, target: { mediaId: 2, progress: 5, offset: 25, confidence: 'high' } });
+  });
+
   it('saisons séparées, numérotation relative : saison identifiée par son titre', () => {
     const result = resolveTarget(
       episode({ animeTitle: 'Attack on Titan', seasonTitle: 'Attack on Titan Season 2', seasonNumber: 2, seasonEpisodeNumber: 5, displayedEpisodeNumber: 5 }),
