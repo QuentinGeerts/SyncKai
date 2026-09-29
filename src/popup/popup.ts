@@ -11,6 +11,7 @@ function getEl<T extends Element>(selector: string): T {
 const loggedOutView = getEl<HTMLElement>('#logged-out-view');
 const loggedInView = getEl<HTMLElement>('#logged-in-view');
 const loginBtn = getEl<HTMLButtonElement>('#login-btn');
+const logoutBtn = getEl<HTMLButtonElement>('#logout-btn');
 const loginSpinner = getEl<SVGSVGElement>('#login-spinner');
 const loginLabel = getEl<HTMLSpanElement>('#login-label');
 const errorBox = getEl<HTMLParagraphElement>('#error-box');
@@ -19,6 +20,7 @@ const statusLabel = getEl<HTMLSpanElement>('#status-label');
 
 function renderAuthState(connected: boolean): void {
   loggedInView.classList.toggle('hidden', !connected);
+  loggedInView.classList.toggle('flex', connected);
   loggedOutView.classList.toggle('hidden', connected);
   loggedOutView.classList.toggle('flex', !connected);
   statusDot.classList.toggle('bg-emerald-500', connected);
@@ -64,8 +66,28 @@ async function handleLogin(): Promise<void> {
   }
 }
 
+// Déconnexion locale : AniList (Implicit Grant) n'expose pas d'endpoint de révocation,
+// on supprime donc simplement le token stocké. Pas besoin de réveiller le service worker.
+async function handleLogout(): Promise<void> {
+  showError(null);
+  logoutBtn.disabled = true;
+  try {
+    await chrome.storage.local.remove(ANILIST_TOKEN_KEY);
+    renderAuthState(false);
+  } catch (error: unknown) {
+    console.error('[SyncKai] Échec de la déconnexion :', error);
+    showError('Impossible de se déconnecter. Réessaie.');
+  } finally {
+    logoutBtn.disabled = false;
+  }
+}
+
 loginBtn.addEventListener('click', (): void => {
   void handleLogin();
+});
+
+logoutBtn.addEventListener('click', (): void => {
+  void handleLogout();
 });
 
 // La popup peut se fermer pendant le flux OAuth : on réagit aussi aux changements de stockage

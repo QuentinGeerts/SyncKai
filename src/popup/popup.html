@@ -43,13 +43,21 @@
       </section>
 
       <!-- Vue connectée -->
-      <section id="logged-in-view" class="hidden">
+      <section id="logged-in-view" class="hidden flex-col gap-2">
         <div class="flex items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-2.5 ring-1 ring-emerald-500/30">
           <svg class="h-4 w-4 shrink-0 text-emerald-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
             <path fill-rule="evenodd" d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0Z" clip-rule="evenodd" />
           </svg>
           <p class="text-sm font-medium text-emerald-300">Connecté à AniList !</p>
         </div>
+
+        <button
+          id="logout-btn"
+          type="button"
+          class="w-full cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-400 ring-1 ring-zinc-800 transition hover:bg-zinc-900 hover:text-red-300 hover:ring-red-500/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Se déconnecter
+        </button>
       </section>
 
       <!-- Message d'erreur -->
