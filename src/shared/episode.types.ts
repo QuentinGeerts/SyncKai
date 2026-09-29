@@ -16,6 +16,8 @@ export interface EpisodeInfo {
   episodeId: string;
   /** Identifiant de la série propre à la plateforme (ex : "GRMG8ZQZR") */
   seriesId: string | null;
+  /** Slug de la série (ex : "one-piece"), pour les anciens liens Crunchyroll sans identifiant */
+  seriesSlug: string | null;
   animeTitle: string;
   seasonNumber: number | null;
   /** Nom de la saison / de l'arc (ex : "Elbaph") */
@@ -40,6 +42,7 @@ export function isEpisodeInfo(value: unknown): value is EpisodeInfo {
     Object.hasOwn(PLATFORMS, value.platform) &&
     typeof value.episodeId === 'string' &&
     isNullableString(value.seriesId) &&
+    isNullableString(value.seriesSlug) &&
     typeof value.animeTitle === 'string' &&
     isNullableNumber(value.seasonNumber) &&
     isNullableString(value.seasonTitle) &&

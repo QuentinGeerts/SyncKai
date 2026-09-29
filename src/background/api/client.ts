@@ -1,29 +1,13 @@
-import {
-  isViewerQueryData,
-  type AniListViewer,
-  type ViewerErrorCode,
-  type ViewerResult,
-} from '../../shared/anilist.types';
+import type { AniListErrorCode } from '../../shared/anilist.types';
 import { isRecord } from '../../shared/guards';
-import { clearAniListSession, getValidToken, saveCachedViewer } from '../../shared/storage';
+import { clearAniListSession, getValidToken } from '../../shared/storage';
 
 const ANILIST_GRAPHQL_URL = 'https://graphql.anilist.co';
 
-const VIEWER_QUERY = /* GraphQL */ `
-  query Viewer {
-    Viewer {
-      id
-      name
-      siteUrl
-      avatar { medium }
-    }
-  }
-`;
+export class AniListApiError extends Error {
+  readonly code: AniListErrorCode;
 
-class AniListApiError extends Error {
-  readonly code: ViewerErrorCode;
-
-  constructor(code: ViewerErrorCode, message: string) {
+  constructor(code: AniListErrorCode, message: string) {
     super(message);
     this.name = 'AniListApiError';
     this.code = code;
@@ -31,10 +15,10 @@ class AniListApiError extends Error {
 }
 
 /**
- * Exécute une requête GraphQL authentifiée et valide le champ `data` avec `isData`.
+ * Exécute une requête ou mutation GraphQL authentifiée et valide le champ `data` avec `isData`.
  * Lève une AniListApiError typée en cas d'échec.
  */
-async function anilistQuery<T>(
+export async function anilistQuery<T>(
   query: string,
   isData: (data: unknown) => data is T,
   variables: Record<string, unknown> = {},
@@ -90,38 +74,4 @@ async function anilistQuery<T>(
     throw new AniListApiError('INVALID_RESPONSE', 'Réponse d’AniList inattendue.');
   }
   return data;
-}
-
-/** N'accepte que des URLs https (optionnellement restreintes à un domaine) venant de l'API. */
-function toSafeUrl(value: string | null | undefined, allowedHost?: string): string | null {
-  if (!value) return null;
-  try {
-    const url = new URL(value);
-    if (url.protocol !== 'https:') return null;
-    if (allowedHost && url.hostname !== allowedHost) return null;
-    return url.toString();
-  } catch {
-    return null;
-  }
-}
-
-/** Récupère le profil de l'utilisateur connecté et le met en cache. */
-export async function getViewer(): Promise<ViewerResult> {
-  try {
-    const { Viewer } = await anilistQuery(VIEWER_QUERY, isViewerQueryData);
-    const viewer: AniListViewer = {
-      id: Viewer.id,
-      name: Viewer.name,
-      siteUrl: toSafeUrl(Viewer.siteUrl, 'anilist.co') ?? `https://anilist.co/user/${Viewer.id}`,
-      avatarUrl: toSafeUrl(Viewer.avatar?.medium),
-    };
-    await saveCachedViewer(viewer);
-    return { ok: true, data: viewer };
-  } catch (error: unknown) {
-    if (error instanceof AniListApiError) {
-      return { ok: false, code: error.code, message: error.message };
-    }
-    console.error('[SyncKai] Erreur inattendue (getViewer) :', error);
-    return { ok: false, code: 'API_ERROR', message: 'Erreur inattendue lors du chargement du profil.' };
-  }
 }

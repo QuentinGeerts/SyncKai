@@ -1,5 +1,6 @@
-import { getViewer } from './api/anilist';
+import { getViewer } from './api/viewer';
 import { loginWithAniList } from './auth';
+import { syncEpisode } from './sync/sync-service';
 import {
   isRuntimeMessage,
   type MessagePayload,
@@ -25,11 +26,7 @@ const handlers: MessageHandlers = {
     return result;
   },
   GET_VIEWER: () => getViewer(),
-  EPISODE_COMPLETED: async (episode, sender) => {
-    // TODO (feature suivante) : mettre à jour la progression sur AniList
-    console.log('[SyncKai] Épisode terminé (onglet %s) :', sender.tab?.id ?? '?', episode);
-    return { ok: true, data: null };
-  },
+  EPISODE_COMPLETED: (episode) => syncEpisode(episode),
 };
 
 // Générique pour conserver la corrélation type ↔ payload ↔ handler

@@ -11,8 +11,8 @@ const log = createLogger('crunchyroll');
  */
 const WATCH_PATH_REGEX = /^\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?watch\/([A-Z0-9]+)(?:\/|$)/i;
 
-/** /series/{seriesId}/… (présent dans le JSON-LD et le lien vers la série) */
-const SERIES_PATH_REGEX = /\/series\/([A-Z0-9]+)(?:\/|$)/i;
+/** /series/{seriesId}/{slug} (présent dans le JSON-LD et le lien vers la série) */
+const SERIES_PATH_REGEX = /\/series\/([A-Z0-9]+)(?:\/([^/?#]+))?/i;
 
 /**
  * Numéro + titre affichés par Crunchyroll, avec préfixe de saison optionnel :
@@ -50,8 +50,9 @@ function parseEpisodeLabel(label: string | null): { number: number | null; title
   return match ? { number: toNumber(match[1]), title: cleanText(match[2]) } : { number: null, title: label };
 }
 
-function parseSeriesId(url: unknown): string | null {
-  return typeof url === 'string' ? (SERIES_PATH_REGEX.exec(url)?.[1] ?? null) : null;
+function parseSeries(url: unknown): { seriesId: string | null; seriesSlug: string | null } {
+  const match = typeof url === 'string' ? SERIES_PATH_REGEX.exec(url) : null;
+  return { seriesId: match?.[1] ?? null, seriesSlug: match?.[2]?.toLowerCase() ?? null };
 }
 
 /** Aplatit un bloc JSON-LD (objet, tableau ou @graph) en liste de nœuds. */
@@ -92,7 +93,7 @@ function extractFromJsonLd(episodeId: string): ExtractedFields | null {
 
       const label = parseEpisodeLabel(cleanText(node.name));
       return {
-        seriesId: parseSeriesId(series['@id']),
+        ...parseSeries(series['@id']),
         animeTitle,
         seasonNumber: toNumber(season.seasonNumber),
         seasonTitle: cleanText(season.name),
@@ -129,7 +130,7 @@ function extractFromDom(episodeId: string): ExtractedFields | null {
   if (owner !== undefined && owner !== episodeId) return null; // DOM de l'épisode précédent
 
   return {
-    seriesId: parseSeriesId(seriesLink?.closest('a')?.href),
+    ...parseSeries(seriesLink?.closest('a')?.href),
     animeTitle,
     seasonNumber: null,
     seasonTitle: null,

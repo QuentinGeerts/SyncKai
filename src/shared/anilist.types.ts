@@ -19,13 +19,16 @@ export function isAniListViewer(value: unknown): value is AniListViewer {
   );
 }
 
-export type ViewerErrorCode =
+/** Erreurs communes à toutes les requêtes AniList */
+export type AniListErrorCode =
   | 'NOT_AUTHENTICATED'
   | 'TOKEN_INVALID'
   | 'RATE_LIMITED'
   | 'NETWORK'
   | 'API_ERROR'
   | 'INVALID_RESPONSE';
+
+export type ViewerErrorCode = AniListErrorCode;
 
 export type ViewerResult = Result<AniListViewer, ViewerErrorCode>;
 

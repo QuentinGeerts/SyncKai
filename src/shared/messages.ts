@@ -2,13 +2,13 @@ import type { ViewerResult } from './anilist.types';
 import type { AuthResult } from './auth.types';
 import { isEpisodeInfo, type EpisodeInfo } from './episode.types';
 import { isRecord } from './guards';
-import type { Result } from './result';
+import type { SyncOutcome } from './sync.types';
 
 /** Type de message → payload envoyé et réponse renvoyée par le service worker. */
 export interface MessageMap {
   LOGIN_ANILIST: { payload: null; response: AuthResult };
   GET_VIEWER: { payload: null; response: ViewerResult };
-  EPISODE_COMPLETED: { payload: EpisodeInfo; response: Result<null, 'NOT_HANDLED'> };
+  EPISODE_COMPLETED: { payload: EpisodeInfo; response: SyncOutcome };
 }
 
 export type MessageType = keyof MessageMap;

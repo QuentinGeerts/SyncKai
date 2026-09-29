@@ -1,0 +1,164 @@
+import { describe, expect, it } from 'vitest';
+import {
+  applyMapping,
+  mappingKey,
+  matchCrunchyrollLink,
+  normalizeTitle,
+  resolveTarget,
+  toSortableDate,
+  type EpisodeNumbers,
+  type MediaCandidate,
+} from './matching';
+
+function candidate(overrides: Partial<MediaCandidate> & Pick<MediaCandidate, 'id'>): MediaCandidate {
+  return { format: 'TV', episodes: 12, startDate: null, titles: [], link: 'id', ...overrides };
+}
+
+function episode(overrides: Partial<EpisodeNumbers>): EpisodeNumbers {
+  return {
+    animeTitle: 'Anime',
+    seasonTitle: null,
+    seasonNumber: 1,
+    seasonEpisodeNumber: 1,
+    displayedEpisodeNumber: 1,
+    ...overrides,
+  };
+}
+
+describe('normalizeTitle', () => {
+  it('retire accents, ponctuation et casse', () => {
+    expect(normalizeTitle('Shingeki no Kyojin: Season 2')).toBe('shingeki no kyojin season 2');
+    expect(normalizeTitle('  Pokémon — Horizons ! ')).toBe('pokemon horizons');
+  });
+});
+
+describe('toSortableDate', () => {
+  it('produit une date triable et place les dates partielles en fin de période', () => {
+    expect(toSortableDate({ year: 2013, month: 4, day: 7 })).toBe(20130407);
+    expect(toSortableDate({ year: 2013, month: null, day: null })).toBe(20131231);
+    expect(toSortableDate(null)).toBeNull();
+  });
+});
+
+describe('matchCrunchyrollLink', () => {
+  it('reconnaît le lien par identifiant de série', () => {
+    expect(matchCrunchyrollLink('https://www.crunchyroll.com/series/GRMG8ZQZR/one-piece', 'GRMG8ZQZR', 'one-piece')).toBe('id');
+    expect(matchCrunchyrollLink('https://www.crunchyroll.com/fr/series/grmg8zqzr', 'GRMG8ZQZR', null)).toBe('id');
+  });
+
+  it('reconnaît l’ancien format par slug', () => {
+    expect(matchCrunchyrollLink('https://www.crunchyroll.com/one-piece', 'GRMG8ZQZR', 'one-piece')).toBe('slug');
+    expect(matchCrunchyrollLink('http://crunchyroll.com/fr/one-piece/', null, 'one-piece')).toBe('slug');
+  });
+
+  it('rejette une autre série, un autre site ou une URL invalide', () => {
+    expect(matchCrunchyrollLink('https://www.crunchyroll.com/series/GOTHER/one-piece', 'GRMG8ZQZR', 'one-piece')).toBeNull();
+    expect(matchCrunchyrollLink('https://www.netflix.com/one-piece', 'GRMG8ZQZR', 'one-piece')).toBeNull();
+    expect(matchCrunchyrollLink('https://evil-crunchyroll.com/one-piece', null, 'one-piece')).toBeNull();
+    expect(matchCrunchyrollLink('pas une url', 'GRMG8ZQZR', 'one-piece')).toBeNull();
+  });
+});
+
+describe('resolveTarget', () => {
+  it('One Piece : fiche unique, numéro affiché absolu (E1180 = S24 E25)', () => {
+    const result = resolveTarget(
+      episode({ animeTitle: 'One Piece', seasonTitle: 'Elbaph', seasonNumber: 24, seasonEpisodeNumber: 25, displayedEpisodeNumber: 1180 }),
+      [
+        candidate({ id: 21, episodes: null, startDate: 19991020, titles: ['ONE PIECE'] }),
+        candidate({ id: 99, format: 'MOVIE', episodes: 1, titles: ['ONE PIECE FILM RED'] }),
+      ],
+    );
+    expect(result).toMatchObject({ ok: true, target: { mediaId: 21, progress: 1180, numbering: 'displayed', offset: 0, confidence: 'high' } });
+  });
+
+  it('saisons séparées, numérotation relative : saison identifiée par son titre', () => {
+    const result = resolveTarget(
+      episode({ animeTitle: 'Attack on Titan', seasonTitle: 'Attack on Titan Season 2', seasonNumber: 2, seasonEpisodeNumber: 5, displayedEpisodeNumber: 5 }),
+      [
+        candidate({ id: 20, episodes: 12, startDate: 20170401, titles: ['Shingeki no Kyojin Season 2', 'Attack on Titan Season 2'], link: 'relation' }),
+        candidate({ id: 10, episodes: 25, startDate: 20130407, titles: ['Shingeki no Kyojin', 'Attack on Titan'] }),
+      ],
+    );
+    expect(result).toMatchObject({ ok: true, target: { mediaId: 20, progress: 5, numbering: 'season', confidence: 'high' } });
+  });
+
+  it('saisons séparées, numérotation relative : saison identifiée par son numéro', () => {
+    const result = resolveTarget(
+      episode({ seasonTitle: 'Arc inconnu', seasonNumber: 2, seasonEpisodeNumber: 3, displayedEpisodeNumber: 3 }),
+      [
+        candidate({ id: 1, episodes: 12, startDate: 20200101 }),
+        candidate({ id: 2, episodes: 12, startDate: 20210101 }),
+      ],
+    );
+    expect(result).toMatchObject({ ok: true, target: { mediaId: 2, progress: 3, confidence: 'high' } });
+  });
+
+  it('numérotation absolue répartie sur plusieurs fiches (E30 → 2e fiche, épisode 5)', () => {
+    const result = resolveTarget(
+      episode({ seasonNumber: 2, seasonEpisodeNumber: 5, displayedEpisodeNumber: 30 }),
+      [
+        candidate({ id: 1, episodes: 25, startDate: 20200101 }),
+        candidate({ id: 2, episodes: 12, startDate: 20210101 }),
+      ],
+    );
+    expect(result).toMatchObject({ ok: true, target: { mediaId: 2, progress: 5, numbering: 'displayed', offset: 25, confidence: 'high' } });
+  });
+
+  it('saison découpée en deux cours sur AniList : report sur la fiche suivante en confiance faible', () => {
+    const result = resolveTarget(
+      episode({ seasonNumber: 1, seasonEpisodeNumber: 15, displayedEpisodeNumber: 15 }),
+      [
+        candidate({ id: 1, episodes: 12, startDate: 20200101 }),
+        candidate({ id: 2, episodes: 12, startDate: 20200701 }),
+      ],
+    );
+    expect(result).toMatchObject({ ok: true, target: { mediaId: 2, progress: 3, confidence: 'low' } });
+  });
+
+  it('saison > 1 mais une seule fiche liée : confiance faible (suite non liée sur AniList)', () => {
+    const result = resolveTarget(episode({ seasonNumber: 2, seasonEpisodeNumber: 4, displayedEpisodeNumber: 4 }), [
+      candidate({ id: 1, episodes: 12 }),
+    ]);
+    expect(result).toMatchObject({ ok: true, target: { mediaId: 1, confidence: 'low' } });
+  });
+
+  it('sans lien plateforme : repli sur le titre exact, en confiance faible', () => {
+    const result = resolveTarget(episode({ animeTitle: 'Frieren' }), [
+      candidate({ id: 1, link: null, titles: ['Sousou no Frieren', 'Frieren'] }),
+      candidate({ id: 2, link: null, titles: ['Frieren: Beyond Journey’s End Mini Anime'] }),
+    ]);
+    expect(result).toMatchObject({ ok: true, target: { mediaId: 1, confidence: 'low' } });
+  });
+
+  it('échoue si aucune fiche ne correspond', () => {
+    expect(resolveTarget(episode({ animeTitle: 'Inconnu' }), [candidate({ id: 1, link: null, titles: ['Autre'] })])).toMatchObject({ ok: false });
+  });
+
+  it('échoue si l’épisode dépasse la fiche unique', () => {
+    expect(resolveTarget(episode({ seasonEpisodeNumber: 13, displayedEpisodeNumber: 13 }), [candidate({ id: 1, episodes: 12 })])).toMatchObject({
+      ok: false,
+    });
+  });
+
+  it('échoue sur un épisode récapitulatif non entier (E12.5)', () => {
+    expect(resolveTarget(episode({ seasonEpisodeNumber: 12.5, displayedEpisodeNumber: 12.5 }), [candidate({ id: 1 })])).toMatchObject({ ok: false });
+  });
+});
+
+describe('applyMapping / mappingKey', () => {
+  const onePiece = episode({ seasonNumber: 24, seasonEpisodeNumber: 26, displayedEpisodeNumber: 1181 });
+
+  it('applique le décalage selon la numérotation en cache', () => {
+    expect(applyMapping(onePiece, { mediaId: 21, numbering: 'displayed', offset: 0, episodes: null })).toBe(1181);
+    expect(applyMapping(onePiece, { mediaId: 2, numbering: 'displayed', offset: 1100, episodes: 100 })).toBe(81);
+  });
+
+  it('invalide le cache si la progression sort de la fiche', () => {
+    expect(applyMapping(episode({ seasonEpisodeNumber: 13, displayedEpisodeNumber: 13 }), { mediaId: 1, numbering: 'season', offset: 0, episodes: 12 })).toBeNull();
+  });
+
+  it('construit une clé stable par série et saison', () => {
+    expect(mappingKey({ platform: 'crunchyroll', seriesId: 'GRMG8ZQZR', animeTitle: 'One Piece', seasonNumber: 24 })).toBe('crunchyroll:GRMG8ZQZR:s24');
+    expect(mappingKey({ platform: 'crunchyroll', seriesId: null, animeTitle: 'One Piece', seasonNumber: null })).toBe('crunchyroll:title:one piece:s0');
+  });
+});

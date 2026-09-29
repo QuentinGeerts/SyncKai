@@ -1,11 +1,14 @@
 import type { EpisodeInfo } from '../../shared/episode.types';
 import { sendMessage } from '../../shared/messages';
 import type { StreamingAdapter } from '../adapters/adapter';
+import { ALERT_TOAST_MS, toastForOutcome } from '../ui/sync-toast';
+import { showToast } from '../ui/toast';
 import { createLogger } from './logger';
 import { trackVideoProgress } from './video-tracker';
 import { waitFor } from './wait-for';
 
-const COMPLETION_THRESHOLD = 0.9;
+/** 85 % : le générique de fin commence parfois avant 90 % (générique + aperçu ≈ 2-3 min sur 24 min) */
+const COMPLETION_THRESHOLD = 0.85;
 const MIN_EPISODE_DURATION_S = 120;
 const VIDEO_WAIT_TIMEOUT_MS = 30_000;
 const METADATA_WAIT_TIMEOUT_MS = 15_000;
@@ -18,6 +21,12 @@ function formatEpisode(e: EpisodeInfo): string {
   const episode = e.seasonEpisodeNumber !== null ? `E${e.seasonEpisodeNumber}` : 'E?';
   const displayed = e.displayedEpisodeNumber !== null ? ` (affiché E${e.displayedEpisodeNumber})` : '';
   return `${e.animeTitle} · ${season} ${episode}${displayed} · ${e.episodeId}`;
+}
+
+/** "One Piece · épisode 1180" pour le toast */
+function formatEpisodeShort(e: EpisodeInfo): string {
+  const number = e.displayedEpisodeNumber ?? e.seasonEpisodeNumber;
+  return number !== null ? `${e.animeTitle} · épisode ${number}` : e.animeTitle;
 }
 
 export interface WatchSession {
@@ -56,6 +65,7 @@ export function startWatchSession(adapter: StreamingAdapter, episodeId: string):
 
     if (isExtensionContextInvalidated()) {
       log.warn('Extension rechargée depuis l’ouverture de la page : recharge l’onglet pour réactiver SyncKai');
+      showToast({ tone: 'warning', title: 'SyncKai a été mis à jour', message: 'Recharge la page pour synchroniser cet épisode.' }, ALERT_TOAST_MS);
       destroy();
       return;
     }
@@ -64,18 +74,22 @@ export function startWatchSession(adapter: StreamingAdapter, episodeId: string):
     const episode = extract() ?? metadata;
     if (!episode) {
       log.error('Épisode terminé mais métadonnées introuvables : complétion non envoyée');
+      showToast({ tone: 'error', title: 'Épisode non identifié', message: 'Impossible de lire les informations de l’épisode sur la page.' }, ALERT_TOAST_MS);
       return;
     }
 
     completionReported = true;
     log.info(`✔ Épisode terminé : ${formatEpisode(episode)}`, episode);
+    const toast = showToast({ tone: 'info', title: 'Synchronisation avec AniList…', message: formatEpisodeShort(episode) });
     try {
-      const result = await sendMessage('EPISODE_COMPLETED', episode);
-      if (result.ok) log.info('Complétion transmise au service worker');
-      else log.warn('Complétion refusée par le service worker :', result.message);
+      const outcome = await sendMessage('EPISODE_COMPLETED', episode);
+      log.info('Résultat de la synchronisation :', outcome);
+      const { content, autoHideMs } = toastForOutcome(outcome);
+      toast.update(content, autoHideMs);
     } catch (error: unknown) {
       completionReported = false;
       log.error('Service worker injoignable :', error);
+      toast.update({ tone: 'error', title: 'SyncKai injoignable', message: 'Recharge la page puis réessaie.' }, ALERT_TOAST_MS);
     }
   }
 

@@ -1,0 +1,198 @@
+import type { EpisodeInfo } from '../../shared/episode.types';
+import type { MediaMapping, NumberingMode } from '../../shared/sync.types';
+
+/** Formats AniList considérés comme des "saisons" (exclut films, OVA, spéciaux, clips) */
+export const SERIES_FORMATS: ReadonlySet<string> = new Set(['TV', 'TV_SHORT', 'ONA']);
+
+/**
+ * Lien entre une fiche AniList et la série de la plateforme :
+ * - id       : externalLink vers /series/{seriesId} (fiable)
+ * - slug     : ancien format d'URL crunchyroll.com/{slug}
+ * - relation : suite/préquelle d'une fiche liée (même franchise)
+ */
+export type LinkKind = 'id' | 'slug' | 'relation' | null;
+
+export interface MediaCandidate {
+  id: number;
+  format: string | null;
+  episodes: number | null;
+  /** Date de début triable (AAAAMMJJ), null si inconnue */
+  startDate: number | null;
+  titles: string[];
+  link: LinkKind;
+}
+
+export type EpisodeNumbers = Pick<
+  EpisodeInfo,
+  'animeTitle' | 'seasonTitle' | 'seasonNumber' | 'seasonEpisodeNumber' | 'displayedEpisodeNumber'
+>;
+
+export interface SyncTarget extends MediaMapping {
+  progress: number;
+  confidence: 'high' | 'low';
+  /** Explication lisible du choix (logs / toast "à vérifier") */
+  reason: string;
+}
+
+export type ResolveResult = { ok: true; target: SyncTarget } | { ok: false; reason: string };
+
+// ─── Helpers ──────────────────────────────────────────────────────────────
+
+/** "Shingeki no Kyojin: Season 2" → "shingeki no kyojin season 2" (accents et ponctuation retirés) */
+export function normalizeTitle(title: string): string {
+  return title
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+export function toSortableDate(date: { year: number | null; month: number | null; day: number | null } | null): number | null {
+  if (!date?.year) return null;
+  // Mois/jour inconnus : placés en fin de période pour ne pas passer devant une date précise
+  return date.year * 10_000 + (date.month ?? 12) * 100 + (date.day ?? 31);
+}
+
+export function matchCrunchyrollLink(url: string, seriesId: string | null, seriesSlug: string | null): LinkKind {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (!/(^|\.)crunchyroll\.com$/i.test(parsed.hostname)) return null;
+
+  const segments = parsed.pathname.toLowerCase().split('/').filter(Boolean);
+  const seriesIndex = segments.indexOf('series');
+  if (seriesIndex !== -1) {
+    return seriesId && segments[seriesIndex + 1] === seriesId.toLowerCase() ? 'id' : null;
+  }
+  // Ancien format : /{slug} ou /{langue}/{slug}
+  return seriesSlug && segments.length <= 2 && segments.at(-1) === seriesSlug ? 'slug' : null;
+}
+
+/** Clé de cache d'une saison : "crunchyroll:GRMG8ZQZR:s24" */
+export function mappingKey(episode: Pick<EpisodeInfo, 'platform' | 'seriesId' | 'animeTitle' | 'seasonNumber'>): string {
+  const series = episode.seriesId ?? `title:${normalizeTitle(episode.animeTitle)}`;
+  return `${episode.platform}:${series}:s${episode.seasonNumber ?? 0}`;
+}
+
+/** Applique une correspondance en cache ; null si elle ne s'applique plus (ex : saison suivante). */
+export function applyMapping(episode: EpisodeNumbers, mapping: MediaMapping): number | null {
+  const base =
+    mapping.numbering === 'displayed'
+      ? episode.displayedEpisodeNumber
+      : (episode.seasonEpisodeNumber ?? episode.displayedEpisodeNumber);
+  if (base === null) return null;
+  const progress = base - mapping.offset;
+  return isValidProgress(progress, mapping.episodes) ? progress : null;
+}
+
+function isValidProgress(progress: number, episodes: number | null): boolean {
+  return Number.isInteger(progress) && progress >= 1 && (episodes === null || progress <= episodes);
+}
+
+const fits = (candidate: MediaCandidate, progress: number): boolean => isValidProgress(progress, candidate.episodes);
+
+const byStartDate = (a: MediaCandidate, b: MediaCandidate): number =>
+  (a.startDate ?? Number.MAX_SAFE_INTEGER) - (b.startDate ?? Number.MAX_SAFE_INTEGER);
+
+/**
+ * Répartit un numéro sur des saisons consécutives à partir de `startIndex`
+ * (ex : épisode 30 avec des saisons de 25 et 12 épisodes → 2e saison, épisode 5).
+ */
+function walkSeasons(seasons: MediaCandidate[], startIndex: number, episode: number): { index: number; progress: number } | null {
+  let remaining = episode;
+  for (let i = startIndex; i < seasons.length; i++) {
+    const { episodes } = seasons[i];
+    // Nombre d'épisodes inconnu : seulement acceptable pour la dernière saison (en cours de diffusion)
+    if (episodes === null) return i === seasons.length - 1 ? { index: i, progress: remaining } : null;
+    if (remaining <= episodes) return { index: i, progress: remaining };
+    remaining -= episodes;
+  }
+  return null;
+}
+
+// ─── Résolution ───────────────────────────────────────────────────────────
+
+/** Choisit la fiche AniList et la progression correspondant à un épisode. */
+export function resolveTarget(episode: EpisodeNumbers, candidates: MediaCandidate[]): ResolveResult {
+  const seasons = candidates.filter((c) => c.format !== null && SERIES_FORMATS.has(c.format)).sort(byStartDate);
+  const linked = seasons.filter((c) => c.link !== null);
+  const animeKey = normalizeTitle(episode.animeTitle);
+
+  // Sans lien vers la plateforme, repli sur un titre identique (confiance faible)
+  const pool = linked.length > 0 ? linked : seasons.filter((c) => c.titles.some((t) => normalizeTitle(t) === animeKey));
+  if (pool.length === 0) return { ok: false, reason: `Aucune fiche AniList trouvée pour « ${episode.animeTitle} »` };
+  const level = (isConfident: boolean): 'high' | 'low' => (isConfident && linked.length > 0 ? 'high' : 'low');
+
+  const displayed = episode.displayedEpisodeNumber;
+  const relative = episode.seasonEpisodeNumber ?? displayed;
+  if (relative === null) return { ok: false, reason: 'Numéro d’épisode introuvable' };
+  if (!Number.isInteger(relative) || (displayed !== null && !Number.isInteger(displayed))) {
+    return { ok: false, reason: 'Épisode spécial (numéro non entier) : non synchronisé' };
+  }
+  // Ex. One Piece : "E1180" affiché pour le 25e épisode de la saison 24
+  const isAbsolute = displayed !== null && episode.seasonEpisodeNumber !== null && displayed > episode.seasonEpisodeNumber;
+
+  const target = (
+    candidate: MediaCandidate,
+    base: number,
+    progress: number,
+    numbering: NumberingMode,
+    confidence: 'high' | 'low',
+    reason: string,
+  ): ResolveResult => ({
+    ok: true,
+    target: { mediaId: candidate.id, numbering, offset: base - progress, episodes: candidate.episodes, progress, confidence, reason },
+  });
+
+  // 1. Fiche unique (ex : One Piece, une seule entrée AniList)
+  if (pool.length === 1) {
+    const only = pool[0];
+    if (isAbsolute && displayed !== null && fits(only, displayed)) {
+      return target(only, displayed, displayed, 'displayed', level(true), 'Fiche unique, numérotation absolue');
+    }
+    if (fits(only, relative)) {
+      // Saison > 1 mais une seule fiche : la suite n'est peut-être pas liée sur AniList
+      const isLaterSeason = !isAbsolute && (episode.seasonNumber ?? 1) > 1;
+      return target(only, relative, relative, 'season', level(!isLaterSeason), isLaterSeason
+        ? `Saison ${episode.seasonNumber} mais une seule fiche AniList trouvée`
+        : 'Fiche unique');
+    }
+    return { ok: false, reason: `Épisode ${displayed ?? relative} au-delà des ${only.episodes ?? '?'} épisodes de la fiche AniList` };
+  }
+
+  // 2. Plusieurs saisons, numérotation absolue : répartition cumulative
+  if (isAbsolute && displayed !== null) {
+    const hit = walkSeasons(pool, 0, displayed);
+    if (hit && fits(pool[hit.index], hit.progress)) {
+      return target(pool[hit.index], displayed, hit.progress, 'displayed', level(true), `Numérotation absolue répartie sur ${pool.length} fiches`);
+    }
+  }
+
+  // 3. Numérotation relative : saison identifiée par son titre…
+  const seasonKey = episode.seasonTitle ? normalizeTitle(episode.seasonTitle) : '';
+  if (seasonKey && seasonKey !== animeKey) {
+    const exact = pool.filter((c) => c.titles.some((t) => normalizeTitle(t) === seasonKey));
+    const matches = exact.length > 0 ? exact : pool.filter((c) => c.titles.some((t) => normalizeTitle(t).includes(seasonKey)));
+    if (matches.length === 1 && fits(matches[0], relative)) {
+      return target(matches[0], relative, relative, 'season', level(true), `Saison identifiée par son titre (« ${episode.seasonTitle} »)`);
+    }
+  }
+
+  // 4. …ou par son numéro, avec report sur la fiche suivante si la saison est découpée (cours)
+  if (episode.seasonNumber !== null && episode.seasonNumber >= 1) {
+    const index = episode.seasonNumber - 1;
+    const hit = walkSeasons(pool, index, relative);
+    if (hit && fits(pool[hit.index], hit.progress)) {
+      const isExact = hit.index === index;
+      return target(pool[hit.index], relative, hit.progress, 'season', level(isExact), isExact
+        ? `Saison ${episode.seasonNumber} = ${index + 1}ᵉ fiche AniList`
+        : `Saison ${episode.seasonNumber} répartie sur plusieurs fiches AniList`);
+    }
+  }
+
+  return { ok: false, reason: 'Impossible de déterminer la saison AniList correspondante' };
+}
