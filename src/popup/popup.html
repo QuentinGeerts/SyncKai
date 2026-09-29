@@ -16,24 +16,44 @@
         <h1 class="text-sm font-semibold tracking-tight">SyncKai</h1>
       </div>
       <span class="flex items-center gap-1.5 rounded-full bg-zinc-900 px-2 py-0.5 text-[10px] font-medium text-zinc-400 ring-1 ring-zinc-800">
-        <span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>
-        Déconnecté
+        <span id="status-dot" class="h-1.5 w-1.5 rounded-full bg-zinc-500"></span>
+        <span id="status-label">Chargement…</span>
       </span>
     </header>
 
     <!-- Contenu principal -->
     <main class="flex flex-col gap-3 px-4 py-4">
-      <p class="text-xs leading-relaxed text-zinc-400">
-        Connecte ton compte AniList pour synchroniser automatiquement tes épisodes regardés.
-      </p>
+      <!-- Vue déconnectée -->
+      <section id="logged-out-view" class="hidden flex-col gap-3">
+        <p class="text-xs leading-relaxed text-zinc-400">
+          Connecte ton compte AniList pour synchroniser automatiquement tes épisodes regardés.
+        </p>
 
-      <button
-        id="login-btn"
-        type="button"
-        class="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-sky-600 px-3 py-2 text-sm font-medium text-white shadow-lg shadow-sky-900/30 transition hover:bg-sky-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        Se connecter à AniList
-      </button>
+        <button
+          id="login-btn"
+          type="button"
+          class="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-sky-600 px-3 py-2 text-sm font-medium text-white shadow-lg shadow-sky-900/30 transition hover:bg-sky-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <svg id="login-spinner" class="hidden h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" class="opacity-25"></circle>
+            <path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" stroke-width="3" stroke-linecap="round"></path>
+          </svg>
+          <span id="login-label">Se connecter à AniList</span>
+        </button>
+      </section>
+
+      <!-- Vue connectée -->
+      <section id="logged-in-view" class="hidden">
+        <div class="flex items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-2.5 ring-1 ring-emerald-500/30">
+          <svg class="h-4 w-4 shrink-0 text-emerald-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0Z" clip-rule="evenodd" />
+          </svg>
+          <p class="text-sm font-medium text-emerald-300">Connecté à AniList !</p>
+        </div>
+      </section>
+
+      <!-- Message d'erreur -->
+      <p id="error-box" role="alert" class="hidden break-all rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-300 ring-1 ring-red-500/30"></p>
     </main>
 
     <footer class="border-t border-zinc-800 px-4 py-2 text-center text-[10px] text-zinc-600">
