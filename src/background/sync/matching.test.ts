@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyMapping,
+  mappingFromManualChoice,
   mappingKey,
   matchCrunchyrollLink,
   normalizeTitle,
@@ -183,5 +184,26 @@ describe('applyMapping / mappingKey', () => {
   it('construit une clé stable par série et saison', () => {
     expect(mappingKey({ platform: 'crunchyroll', seriesId: 'GRMG8ZQZR', animeTitle: 'One Piece', seasonNumber: 24 })).toBe('crunchyroll:GRMG8ZQZR:s24');
     expect(mappingKey({ platform: 'crunchyroll', seriesId: null, animeTitle: 'One Piece', seasonNumber: null })).toBe('crunchyroll:title:one piece:s0');
+  });
+});
+
+describe('mappingFromManualChoice', () => {
+  const ep = episode({ seasonNumber: 2, seasonEpisodeNumber: 4, displayedEpisodeNumber: 28 });
+
+  it('numéro dans la saison confirmé : numbering "season" sans décalage', () => {
+    expect(mappingFromManualChoice(ep, 7, 4, 12)).toEqual({ mediaId: 7, numbering: 'season', offset: 0, episodes: 12 });
+  });
+
+  it('autre numéro confirmé : décalage calculé depuis le numéro affiché', () => {
+    const mapping = mappingFromManualChoice(ep, 7, 16, 24);
+    expect(mapping).toEqual({ mediaId: 7, numbering: 'displayed', offset: 12, episodes: 24 });
+    // L'épisode suivant (E29) donnera 17
+    expect(mapping && applyMapping(episode({ seasonEpisodeNumber: 5, displayedEpisodeNumber: 29 }), mapping)).toBe(17);
+  });
+
+  it('refuse une progression invalide ou au-delà de la fiche', () => {
+    expect(mappingFromManualChoice(ep, 7, 0, 12)).toBeNull();
+    expect(mappingFromManualChoice(ep, 7, 13, 12)).toBeNull();
+    expect(mappingFromManualChoice(ep, 7, 2.5, 12)).toBeNull();
   });
 });

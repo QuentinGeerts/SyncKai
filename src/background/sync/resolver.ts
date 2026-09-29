@@ -1,4 +1,5 @@
 import type { EpisodeInfo } from '../../shared/episode.types';
+import type { CandidateSummary } from '../../shared/review.types';
 import { deleteMediaMapping, getMediaMapping, saveMediaMapping } from '../../shared/storage';
 import { getAnimeByIds, searchAnime, type AniListMedia } from '../api/media';
 import {
@@ -17,13 +18,27 @@ import {
 const FRANCHISE_RELATIONS: ReadonlySet<string> = new Set(['SEQUEL', 'PREQUEL']);
 /** Limite les requêtes supplémentaires pour récupérer les saisons absentes de la recherche */
 const MAX_FETCH_ROUNDS = 2;
+/** Nombre de fiches proposées dans une carte de vérification */
+const MAX_REVIEW_CANDIDATES = 8;
+
+interface CollectedCandidates {
+  candidates: MediaCandidate[];
+  /** Fiches complètes, dans l'ordre de pertinence de la recherche */
+  media: AniListMedia[];
+}
+
+export interface EpisodeResolution {
+  result: ResolveResult;
+  /** Fiches à proposer si l'utilisateur doit choisir (vide si la correspondance vient du cache) */
+  candidates: CandidateSummary[];
+}
 
 /**
  * Recherche les fiches AniList de la franchise et détermine le lien de chacune avec la série.
  * Les suites/préquelles d'une fiche liée sont ajoutées (et récupérées si besoin) : AniList ne lie
  * pas toujours chaque saison à la plateforme.
  */
-async function collectCandidates(episode: EpisodeInfo): Promise<MediaCandidate[]> {
+async function collectCandidates(episode: EpisodeInfo): Promise<CollectedCandidates> {
   const mediaById = new Map<number, AniListMedia>();
   const links = new Map<number, LinkKind>();
 
@@ -73,31 +88,58 @@ async function collectCandidates(episode: EpisodeInfo): Promise<MediaCandidate[]
     if (!changed) break;
   }
 
-  return [...mediaById.values()].map((media) => ({
-    id: media.id,
-    format: media.format,
-    episodes: media.episodes,
-    startDate: toSortableDate(media.startDate),
-    titles: media.titles,
-    link: links.get(media.id) ?? null,
+  const media = [...mediaById.values()];
+  const candidates = media.map((m) => ({
+    id: m.id,
+    format: m.format,
+    episodes: m.episodes,
+    startDate: toSortableDate(m.startDate),
+    titles: m.titles,
+    link: links.get(m.id) ?? null,
   }));
+  return { candidates, media };
+}
+
+export function toCandidateSummary(media: AniListMedia): CandidateSummary {
+  return { id: media.id, title: media.displayTitle, format: media.format, episodes: media.episodes, year: media.year, coverUrl: media.coverUrl };
+}
+
+/** Fiches à proposer : suggestion d'abord, puis saisons liées (ordre de diffusion), puis autres résultats. */
+function summarize({ candidates, media }: CollectedCandidates, suggestedId: number | null): CandidateSummary[] {
+  const byId = new Map(media.map((m) => [m.id, m]));
+  const linkedIds = candidates
+    .filter((c) => c.link !== null)
+    .sort((a, b) => (a.startDate ?? Number.MAX_SAFE_INTEGER) - (b.startDate ?? Number.MAX_SAFE_INTEGER))
+    .map((c) => c.id);
+  const otherIds = media.filter((m) => m.format !== 'MUSIC').map((m) => m.id);
+  const ordered = [...new Set([...(suggestedId !== null ? [suggestedId] : []), ...linkedIds, ...otherIds])];
+  return ordered.flatMap((id) => {
+    const m = byId.get(id);
+    return m ? [toCandidateSummary(m)] : [];
+  }).slice(0, MAX_REVIEW_CANDIDATES);
+}
+
+/** Fiches candidates d'un épisode, sans résolution (ex : correction d'une synchro passée). */
+export async function findReviewCandidates(episode: EpisodeInfo, suggestedId: number | null): Promise<CandidateSummary[]> {
+  return summarize(await collectCandidates(episode), suggestedId);
 }
 
 /** Résout la fiche AniList d'un épisode : cache d'abord, recherche sinon (et mise en cache si fiable). */
-export async function resolveEpisode(episode: EpisodeInfo): Promise<ResolveResult> {
+export async function resolveEpisode(episode: EpisodeInfo): Promise<EpisodeResolution> {
   const key = mappingKey(episode);
 
   const cached = await getMediaMapping(key);
   if (cached) {
     const progress = applyMapping(episode, cached);
     if (progress !== null) {
-      return { ok: true, target: { ...cached, progress, confidence: 'high', reason: 'Correspondance en cache' } };
+      return { result: { ok: true, target: { ...cached, progress, confidence: 'high', reason: 'Correspondance en cache' } }, candidates: [] };
     }
     // Ex : numérotation absolue passée à la fiche suivante → nouvelle résolution
     await deleteMediaMapping(key);
   }
 
-  const candidates = await collectCandidates(episode);
+  const collected = await collectCandidates(episode);
+  const { candidates } = collected;
   // Diagnostic : fiches retenues comme appartenant à la série (les autres résultats de recherche sont omis)
   console.info(
     '[SyncKai:sync] Fiches liées :',
@@ -111,5 +153,5 @@ export async function resolveEpisode(episode: EpisodeInfo): Promise<ResolveResul
     const { mediaId, numbering, offset, episodes } = result.target;
     await saveMediaMapping(key, { mediaId, numbering, offset, episodes });
   }
-  return result;
+  return { result, candidates: summarize(collected, result.ok ? result.target.mediaId : null) };
 }

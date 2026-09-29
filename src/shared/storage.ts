@@ -1,13 +1,19 @@
 import { isAniListViewer, type AniListViewer } from './anilist.types';
 import { isAniListToken, type AniListToken } from './auth.types';
 import { isRecord } from './guards';
+import { isPendingReview, isRecentSync, type PendingReview, type RecentSync } from './review.types';
 import { isMediaMapping, type MediaMapping } from './sync.types';
+
+const MAX_PENDING_REVIEWS = 20;
+const MAX_RECENT_SYNCS = 5;
 
 /** Clés utilisées dans chrome.storage.local */
 export const STORAGE_KEYS = {
   anilistToken: 'anilistToken',
   anilistViewer: 'anilistViewer',
   mediaMappings: 'mediaMappings',
+  pendingReviews: 'pendingReviews',
+  recentSyncs: 'recentSyncs',
 } as const;
 
 /** Retourne le token AniList s'il existe et n'a pas expiré. */
@@ -53,7 +59,45 @@ export async function deleteMediaMapping(key: string): Promise<void> {
   await chrome.storage.local.set({ [STORAGE_KEYS.mediaMappings]: rest });
 }
 
-/** Supprime toutes les données de session AniList (token + profil en cache). */
+// ─── Vérifications manuelles & dernières synchros (propres à l'utilisateur) ───
+
+/** Cartes en attente, la plus récente en premier */
+export async function getPendingReviews(): Promise<PendingReview[]> {
+  const stored = await chrome.storage.local.get(STORAGE_KEYS.pendingReviews);
+  const raw: unknown = stored[STORAGE_KEYS.pendingReviews];
+  return (Array.isArray(raw) ? raw.filter(isPendingReview) : []).sort((a, b) => b.createdAt - a.createdAt);
+}
+
+/** Ajoute ou remplace la carte d'une saison (une seule par clé : le dernier épisode l'emporte). */
+export async function savePendingReview(review: PendingReview): Promise<void> {
+  const others = (await getPendingReviews()).filter((r) => r.key !== review.key);
+  await chrome.storage.local.set({ [STORAGE_KEYS.pendingReviews]: [review, ...others].slice(0, MAX_PENDING_REVIEWS) });
+}
+
+export async function deletePendingReview(key: string): Promise<void> {
+  const remaining = (await getPendingReviews()).filter((r) => r.key !== key);
+  await chrome.storage.local.set({ [STORAGE_KEYS.pendingReviews]: remaining });
+}
+
+/** Dernières synchros, la plus récente en premier */
+export async function getRecentSyncs(): Promise<RecentSync[]> {
+  const stored = await chrome.storage.local.get(STORAGE_KEYS.recentSyncs);
+  const raw: unknown = stored[STORAGE_KEYS.recentSyncs];
+  return (Array.isArray(raw) ? raw.filter(isRecentSync) : []).sort((a, b) => b.syncedAt - a.syncedAt);
+}
+
+/** Une entrée par saison : la synchro la plus récente remplace la précédente. */
+export async function addRecentSync(sync: RecentSync): Promise<void> {
+  const others = (await getRecentSyncs()).filter((s) => s.key !== sync.key);
+  await chrome.storage.local.set({ [STORAGE_KEYS.recentSyncs]: [sync, ...others].slice(0, MAX_RECENT_SYNCS) });
+}
+
+/** Supprime les données de session AniList : token, profil, vérifications et synchros de l'utilisateur. */
 export async function clearAniListSession(): Promise<void> {
-  await chrome.storage.local.remove([STORAGE_KEYS.anilistToken, STORAGE_KEYS.anilistViewer]);
+  await chrome.storage.local.remove([
+    STORAGE_KEYS.anilistToken,
+    STORAGE_KEYS.anilistViewer,
+    STORAGE_KEYS.pendingReviews,
+    STORAGE_KEYS.recentSyncs,
+  ]);
 }

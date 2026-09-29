@@ -1,4 +1,5 @@
 import type { AniListErrorCode } from '../../shared/anilist.types';
+import { refreshReviewBadge } from '../../shared/badge';
 import { isRecord } from '../../shared/guards';
 import { clearAniListSession, getValidToken } from '../../shared/storage';
 
@@ -56,6 +57,7 @@ export async function anilistQuery<T>(
     errors.some((e) => isRecord(e) && typeof e.message === 'string' && /invalid token/i.test(e.message));
   if (isTokenInvalid) {
     await clearAniListSession();
+    await refreshReviewBadge();
     throw new AniListApiError('TOKEN_INVALID', 'Session AniList expirée. Reconnecte-toi.');
   }
 

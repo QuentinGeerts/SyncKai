@@ -1,5 +1,10 @@
 export type Child = Node | string | null | undefined | false;
 
+/** Retire les enfants "vides" (null, undefined, false) pour replaceChildren / append */
+export function nodes(children: Child[]): (Node | string)[] {
+  return children.filter((child): child is Node | string => child !== null && child !== undefined && child !== false);
+}
+
 type EventHandlers = { [K in keyof HTMLElementEventMap]?: (event: HTMLElementEventMap[K]) => void };
 
 interface ElementProps {
@@ -23,6 +28,6 @@ export function h<K extends keyof HTMLElementTagNameMap>(
   for (const [type, handler] of Object.entries(props.on ?? {})) {
     el.addEventListener(type, handler as EventListener);
   }
-  el.append(...children.filter((child): child is Node | string => child !== null && child !== undefined && child !== false));
+  el.append(...nodes(children));
   return el;
 }

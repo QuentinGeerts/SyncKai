@@ -1,4 +1,5 @@
 import { isRecord } from '../../shared/guards';
+import { toSafeUrl } from '../../shared/url';
 import { anilistQuery } from './client';
 
 /** Fiche AniList normalisée (les champs absents de l'API deviennent null / []) */
@@ -7,7 +8,11 @@ export interface AniListMedia {
   format: string | null;
   episodes: number | null;
   startDate: { year: number | null; month: number | null; day: number | null } | null;
+  /** Titre préféré de l'utilisateur (réglage AniList), pour l'affichage */
+  displayTitle: string;
   titles: string[];
+  year: number | null;
+  coverUrl: string | null;
   externalLinkUrls: string[];
   relations: { relationType: string | null; id: number; type: string | null; format: string | null }[];
 }
@@ -17,6 +22,8 @@ const MEDIA_FIELDS = /* GraphQL */ `
   format
   episodes
   startDate { year month day }
+  seasonYear
+  coverImage { medium }
   title { romaji english native userPreferred }
   synonyms
   externalLinks { url }
@@ -51,12 +58,16 @@ function parseMedia(value: unknown): AniListMedia | null {
   const title = isRecord(value.title) ? value.title : {};
   const start = isRecord(value.startDate) ? value.startDate : null;
   const titles = [title.romaji, title.english, title.native, title.userPreferred, ...arr(value.synonyms)];
+  const cover = isRecord(value.coverImage) ? value.coverImage : {};
 
   return {
     id: value.id,
     format: str(value.format),
     episodes: num(value.episodes),
     startDate: start ? { year: num(start.year), month: num(start.month), day: num(start.day) } : null,
+    displayTitle: str(title.userPreferred) ?? str(title.romaji) ?? str(title.english) ?? `#${value.id}`,
+    year: num(value.seasonYear) ?? (start ? num(start.year) : null),
+    coverUrl: toSafeUrl(str(cover.medium)),
     titles: [...new Set(titles.filter((t): t is string => typeof t === 'string' && t.length > 0))],
     externalLinkUrls: arr(value.externalLinks).flatMap((l) => (isRecord(l) && typeof l.url === 'string' ? [l.url] : [])),
     relations: arr(isRecord(value.relations) ? value.relations.edges : []).flatMap((edge) => {

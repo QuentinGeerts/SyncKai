@@ -89,6 +89,27 @@ export function applyMapping(episode: EpisodeNumbers, mapping: MediaMapping): nu
   return isValidProgress(progress, mapping.episodes) ? progress : null;
 }
 
+/**
+ * Déduit une correspondance d'un choix manuel (fiche + épisode AniList confirmé par l'utilisateur).
+ * Ex : Crunchyroll affiche E28, l'utilisateur confirme l'épisode 4 → numbering "displayed", offset 24,
+ * donc E29 donnera 5. Retourne null si la progression est invalide pour la fiche.
+ */
+export function mappingFromManualChoice(
+  episode: EpisodeNumbers,
+  mediaId: number,
+  progress: number,
+  episodes: number | null,
+): MediaMapping | null {
+  if (!isValidProgress(progress, episodes)) return null;
+  const { seasonEpisodeNumber: season, displayedEpisodeNumber: displayed } = episode;
+
+  // Numéro dans la saison identique : correspondance la plus simple et la plus stable
+  if (season !== null && progress === season) return { mediaId, numbering: 'season', offset: 0, episodes };
+  if (displayed !== null) return { mediaId, numbering: 'displayed', offset: displayed - progress, episodes };
+  if (season !== null) return { mediaId, numbering: 'season', offset: season - progress, episodes };
+  return null;
+}
+
 function isValidProgress(progress: number, episodes: number | null): boolean {
   return Number.isInteger(progress) && progress >= 1 && (episodes === null || progress <= episodes);
 }
