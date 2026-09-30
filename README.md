@@ -9,6 +9,7 @@ Extension de navigateur (Manifest V3) qui détecte les épisodes regardés sur C
 - Synchronisation au début du générique de fin (ou à 85 % si l'information n'est pas disponible).
 - Toast de confirmation directement sur la page, même en plein écran.
 - Choix manuel de la fiche AniList quand la correspondance est incertaine, et correction des dernières synchros.
+- Page d'options : pause, mode de déclenchement (générique ou pourcentage), toasts, gestion des correspondances mémorisées.
 
 Plateformes prises en charge : Crunchyroll. Service de suivi : AniList.
 
@@ -40,6 +41,7 @@ Cet identifiant d'extension est fixé par la clé publique `key` du `manifest.js
 | `npm run build` | Vérification TypeScript puis build de l'extension dans `dist/` |
 | `npm run dev` | Build en mode développement (Vite + `@crxjs/vite-plugin`) |
 | `npm test` | Tests unitaires (Vitest) |
+| `npm run icons` | Régénère les icônes PNG dans `public/icons/` |
 
 ## Architecture
 
@@ -48,7 +50,10 @@ src/
   background/   Service worker : OAuth, API AniList, résolution des correspondances, synchronisation
   content/      Content script : adapters par plateforme, suivi de la vidéo, toast
   popup/        Popup (TypeScript + Tailwind CSS) : connexion, profil, vérifications, dernières synchros
-  shared/       Types, messages typés et accès au stockage communs
+  options/      Page d'options (réglages, correspondances mémorisées)
+  ui/           Helpers DOM et icônes partagés par le popup et la page d'options
+  shared/       Types, messages typés, réglages et accès au stockage communs
+scripts/        Outils de développement (génération des icônes)
 ```
 
 - **Pattern Adapter** : chaque plateforme implémente `StreamingAdapter` (`src/content/adapters/`).
