@@ -4,6 +4,8 @@ export interface ToastContent {
   tone: ToastTone;
   title: string;
   message?: string;
+  /** Bouton d'action (ex : "Réessayer") */
+  action?: { label: string; onClick: () => void };
 }
 
 export interface ToastHandle {
@@ -39,6 +41,12 @@ const STYLES = `
   .brand { margin-bottom: 2px; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: #a1a1aa; }
   .title { font-weight: 600; overflow-wrap: anywhere; }
   .message { margin-top: 2px; font-weight: 400; color: #a1a1aa; overflow-wrap: anywhere; }
+  .action {
+    margin-top: 8px; padding: 4px 10px; border: 1px solid #52525b; border-radius: 6px;
+    background: #27272a; color: #f4f4f5; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+  .action:hover { background: #3f3f46; }
+  .action:focus-visible, .close:focus-visible { outline: 2px solid #38bdf8; outline-offset: 2px; }
   .close {
     flex: none; margin: -4px -6px 0 4px; padding: 2px 6px; border: 0; border-radius: 6px;
     background: none; color: #71717a; font: inherit; font-size: 14px; cursor: pointer;
@@ -80,11 +88,13 @@ export function showToast(content: ToastContent, autoHideMs?: number): ToastHand
   const brand = el('div', 'brand', 'SyncKai');
   const title = el('div', 'title');
   const message = el('div', 'message');
+  const action = el('button', 'action');
+  action.type = 'button';
   const close = el('button', 'close', '×');
   close.type = 'button';
   close.setAttribute('aria-label', 'Fermer');
 
-  body.append(brand, title, message);
+  body.append(brand, title, message, action);
   toast.append(icon, body, close);
   shadow.append(style, toast);
 
@@ -102,6 +112,9 @@ export function showToast(content: ToastContent, autoHideMs?: number): ToastHand
       title.textContent = next.title;
       message.textContent = next.message ?? '';
       message.hidden = !next.message;
+      action.hidden = !next.action;
+      action.textContent = next.action?.label ?? '';
+      action.onclick = next.action ? () => next.action?.onClick() : null;
       clearTimeout(hideTimer);
       if (hideAfterMs !== undefined) hideTimer = setTimeout(() => handle.dismiss(), hideAfterMs);
     },

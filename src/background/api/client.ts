@@ -2,6 +2,7 @@ import type { AniListErrorCode } from '../../shared/anilist.types';
 import { refreshReviewBadge } from '../../shared/badge';
 import { isRecord } from '../../shared/guards';
 import { clearAniListSession, getValidToken } from '../../shared/storage';
+import { retryDelayMs, sleep } from './rate-limit';
 
 const ANILIST_GRAPHQL_URL = 'https://graphql.anilist.co';
 
@@ -23,6 +24,7 @@ export async function anilistQuery<T>(
   query: string,
   isData: (data: unknown) => data is T,
   variables: Record<string, unknown> = {},
+  isRetry = false,
 ): Promise<T> {
   const token = await getValidToken();
   if (!token) throw new AniListApiError('NOT_AUTHENTICATED', 'Non connecté à AniList.');
@@ -62,6 +64,13 @@ export async function anilistQuery<T>(
   }
 
   if (response.status === 429) {
+    // Une seule nouvelle tentative, si AniList demande une attente courte (requête non traitée : sans risque)
+    const delay = isRetry ? null : retryDelayMs(response.headers.get('Retry-After'));
+    if (delay !== null) {
+      console.warn(`[SyncKai] Limite de requêtes AniList atteinte, nouvelle tentative dans ${Math.ceil(delay / 1000)} s`);
+      await sleep(delay);
+      return anilistQuery(query, isData, variables, true);
+    }
     throw new AniListApiError('RATE_LIMITED', 'Trop de requêtes vers AniList. Réessaie dans une minute.');
   }
 

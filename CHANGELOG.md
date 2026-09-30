@@ -13,6 +13,11 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), ver
   - déclenchement au générique de fin ou à un pourcentage réglable (70–98 %) ;
   - activation des toasts de confirmation (les alertes restent affichées) ;
   - liste des correspondances mémorisées, avec « Oublier » par saison et réinitialisation complète.
+- **Bouton « Réessayer »** dans le toast quand une synchronisation échoue (réseau, AniList indisponible) : l'épisode n'est plus perdu.
+
+### Modifié
+
+- Limite de requêtes AniList (429) : nouvelle tentative automatique si AniList demande une attente courte (≤ 20 s).
 
 ## [1.0.0] - 2026-09-30
 

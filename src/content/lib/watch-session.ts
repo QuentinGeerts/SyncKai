@@ -11,6 +11,8 @@ import { waitFor } from './wait-for';
 const MIN_EPISODE_DURATION_S = 120;
 const VIDEO_WAIT_TIMEOUT_MS = 30_000;
 const METADATA_WAIT_TIMEOUT_MS = 15_000;
+/** Toast d'erreur avec "Réessayer" : laissé plus longtemps pour avoir le temps de cliquer */
+const RETRY_TOAST_MS = 15_000;
 
 const log = createLogger('session');
 
@@ -98,19 +100,33 @@ export function startWatchSession(adapter: StreamingAdapter, episodeId: string):
       log.info('Synchronisation en pause (options) : épisode non envoyé');
       return;
     }
-    // Toasts désactivés : seules les alertes (à vérifier, erreurs) restent affichées
-    const toast = settings.showToast
+    await syncWithFeedback(episode, settings.showToast);
+  }
+
+  /**
+   * Envoie l'épisode au service worker et affiche le résultat.
+   * Toasts désactivés : seules les alertes (à vérifier, erreurs) restent affichées.
+   * Une erreur (réseau, AniList indisponible…) propose "Réessayer" : l'épisode n'est pas perdu.
+   */
+  async function syncWithFeedback(episode: EpisodeInfo, showProgress: boolean): Promise<void> {
+    const toast = showProgress
       ? showToast({ tone: 'info', title: 'Synchronisation avec AniList…', message: formatEpisodeShort(episode) })
       : null;
     const notify = (content: ToastContent, autoHideMs: number): void => {
       if (toast) toast.update(content, autoHideMs);
       else if (content.tone === 'warning' || content.tone === 'error') showToast(content, autoHideMs);
     };
+
     try {
       const outcome = await sendMessage('EPISODE_COMPLETED', episode);
       log.info('Résultat de la synchronisation :', outcome);
       const { content, autoHideMs } = toastForOutcome(outcome);
-      notify(content, autoHideMs);
+      if (outcome.status === 'error') {
+        // Nouvelle tentative explicite : le toast de progression est forcé pour voir le résultat
+        notify({ ...content, action: { label: 'Réessayer', onClick: () => void syncWithFeedback(episode, true) } }, RETRY_TOAST_MS);
+      } else {
+        notify(content, autoHideMs);
+      }
     } catch (error: unknown) {
       completionReported = false;
       log.error('Service worker injoignable :', error);
