@@ -1,6 +1,7 @@
 import type { EpisodeInfo } from '../../shared/episode.types';
 import { isRecord } from '../../shared/guards';
 import { createLogger } from '../lib/logger';
+import { cleanText, createLabelGuard, labelKey, readJsonLdNodes, toNumber } from './parsing';
 import type { StreamingAdapter } from './adapter';
 
 const log = createLogger('crunchyroll');
@@ -32,23 +33,14 @@ const SELECTORS = {
   anyVideo: 'video',
   seriesLink: '[data-t="show-title-link"], a.show-title-link',
   episodeHeading: 'h1.title, [data-t="episode-title"], h1',
-  jsonLd: 'script[type="application/ld+json"]',
 } as const;
 
 type ExtractedFields = Omit<EpisodeInfo, 'platform' | 'episodeId' | 'url'>;
 
+/** Évite d'attribuer au nouvel épisode le DOM de l'épisode précédent (voir createLabelGuard) */
+const labels = createLabelGuard();
+
 // ─── Helpers de parsing ────────────────────────────────────────────────────
-
-function toNumber(value: unknown): number | null {
-  const n = typeof value === 'string' ? Number.parseFloat(value) : value;
-  return typeof n === 'number' && Number.isFinite(n) ? n : null;
-}
-
-function cleanText(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const text = value.replace(/\s+/g, ' ').trim();
-  return text ? text : null;
-}
 
 function parseEpisodeLabel(label: string | null): { number: number | null; title: string | null } {
   const match = label ? EPISODE_LABEL_REGEX.exec(label) : null;
@@ -60,13 +52,6 @@ function parseSeries(url: unknown): { seriesId: string | null; seriesSlug: strin
   return { seriesId: match?.[1] ?? null, seriesSlug: match?.[2]?.toLowerCase() ?? null };
 }
 
-/** Aplatit un bloc JSON-LD (objet, tableau ou @graph) en liste de nœuds. */
-function flattenJsonLd(data: unknown): Record<string, unknown>[] {
-  if (Array.isArray(data)) return data.flatMap(flattenJsonLd);
-  if (!isRecord(data)) return [];
-  return Array.isArray(data['@graph']) ? [data, ...data['@graph'].flatMap(flattenJsonLd)] : [data];
-}
-
 // ─── Stratégies d'extraction (de la plus fiable à la moins fiable) ─────────
 
 /**
@@ -76,51 +61,28 @@ function flattenJsonLd(data: unknown): Record<string, unknown>[] {
  *      partOfSeries: { name: "One Piece", "@id": ".../series/GRMG8ZQZR/one-piece" } }
  */
 function extractFromJsonLd(episodeId: string): ExtractedFields | null {
-  for (const script of document.querySelectorAll<HTMLScriptElement>(SELECTORS.jsonLd)) {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(script.textContent ?? '');
-    } catch {
-      continue;
-    }
+  for (const node of readJsonLdNodes('TVEpisode')) {
+    // En SPA, le JSON-LD peut rester celui de l'épisode précédent : on vérifie qu'il correspond
+    const nodeUrl = cleanText(node.url) ?? cleanText(node['@id']);
+    if (nodeUrl && !nodeUrl.includes(episodeId)) continue;
 
-    for (const node of flattenJsonLd(parsed)) {
-      if (node['@type'] !== 'TVEpisode') continue;
+    const series = isRecord(node.partOfSeries) ? node.partOfSeries : {};
+    const season = isRecord(node.partOfSeason) ? node.partOfSeason : {};
+    const animeTitle = cleanText(series.name);
+    if (!animeTitle) continue;
 
-      // En SPA, le JSON-LD peut rester celui de l'épisode précédent : on vérifie qu'il correspond
-      const nodeUrl = cleanText(node.url) ?? cleanText(node['@id']);
-      if (nodeUrl && !nodeUrl.includes(episodeId)) continue;
-
-      const series = isRecord(node.partOfSeries) ? node.partOfSeries : {};
-      const season = isRecord(node.partOfSeason) ? node.partOfSeason : {};
-      const animeTitle = cleanText(series.name);
-      if (!animeTitle) continue;
-
-      const label = parseEpisodeLabel(cleanText(node.name));
-      return {
-        ...parseSeries(series['@id']),
-        animeTitle,
-        seasonNumber: toNumber(season.seasonNumber),
-        seasonTitle: cleanText(season.name),
-        seasonEpisodeNumber: toNumber(node.episodeNumber),
-        displayedEpisodeNumber: label.number,
-        episodeTitle: label.title,
-      };
-    }
+    const label = parseEpisodeLabel(cleanText(node.name));
+    return {
+      ...parseSeries(series['@id']),
+      animeTitle,
+      seasonNumber: toNumber(season.seasonNumber),
+      seasonTitle: cleanText(season.name),
+      seasonEpisodeNumber: toNumber(node.episodeNumber),
+      displayedEpisodeNumber: label.number,
+      episodeTitle: label.title,
+    };
   }
   return null;
-}
-
-/**
- * Libellé d'épisode ("E1180|titre") → episodeId auquel il a été attribué.
- * Après une navigation SPA, le DOM affiche encore l'épisode précédent pendant un instant et,
- * contrairement au JSON-LD, ne contient pas d'episodeId permettant de vérifier sa fraîcheur.
- * Un libellé déjà vu pour un AUTRE épisode signale donc un DOM périmé.
- */
-const labelOwners = new Map<string, string>();
-
-function labelKey(displayedNumber: number | null, title: string | null): string | null {
-  return title ? `${displayedNumber ?? '?'}|${title}` : null;
 }
 
 /** 2. DOM de la page de lecture (moins riche : pas de saison ni de numéro relatif). */
@@ -130,9 +92,7 @@ function extractFromDom(episodeId: string): ExtractedFields | null {
   if (!animeTitle) return null;
 
   const label = parseEpisodeLabel(cleanText(document.querySelector(SELECTORS.episodeHeading)?.textContent));
-  const key = labelKey(label.number, label.title);
-  const owner = key ? labelOwners.get(key) : undefined;
-  if (owner !== undefined && owner !== episodeId) return null; // DOM de l'épisode précédent
+  if (labels.isStale(episodeId, labelKey(label.number, label.title))) return null; // DOM de l'épisode précédent
 
   return {
     ...parseSeries(seriesLink?.closest('a')?.href),
@@ -172,8 +132,7 @@ export const crunchyrollAdapter: StreamingAdapter = {
     for (const strategy of STRATEGIES) {
       const fields = strategy.run(episodeId);
       if (fields) {
-        const key = labelKey(fields.displayedEpisodeNumber, fields.episodeTitle);
-        if (key) labelOwners.set(key, episodeId);
+        labels.remember(episodeId, labelKey(fields.displayedEpisodeNumber, fields.episodeTitle));
         log.info(`Métadonnées extraites via ${strategy.name}`);
         return { platform: 'crunchyroll', episodeId, url: url.href, ...fields };
       }

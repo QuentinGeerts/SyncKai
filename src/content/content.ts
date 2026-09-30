@@ -1,11 +1,12 @@
 import type { StreamingAdapter } from './adapters/adapter';
+import { adnAdapter } from './adapters/adn';
 import { crunchyrollAdapter } from './adapters/crunchyroll';
 import { createLogger } from './lib/logger';
 import { watchUrl } from './lib/url-watcher';
 import { startWatchSession, type WatchSession } from './lib/watch-session';
 
 /** Adapters disponibles : ajouter ici les futures plateformes (ADN…) */
-const ADAPTERS: readonly StreamingAdapter[] = [crunchyrollAdapter];
+const ADAPTERS: readonly StreamingAdapter[] = [crunchyrollAdapter, adnAdapter];
 
 const log = createLogger('content');
 

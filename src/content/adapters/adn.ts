@@ -1,0 +1,151 @@
+import type { EpisodeInfo } from '../../shared/episode.types';
+import { isRecord } from '../../shared/guards';
+import { createLogger } from '../lib/logger';
+import type { StreamingAdapter } from './adapter';
+import { cleanText, createLabelGuard, labelKey, readJsonLdNodes, toNumber } from './parsing';
+
+const log = createLogger('adn');
+
+/**
+ * /video/{seriesId}-{seriesSlug}/{episodeId}-{episodeSlug}, préfixe de langue optionnel (/de/…).
+ * Ex : /video/1311-tougen-anki/29344-episode-1 (vérifié le 2026-09-30).
+ */
+const WATCH_PATH_REGEX = /^\/(?:[a-z]{2}\/)?video\/(\d+)-([^/]+)\/(\d+)(?:-[^/?#]*)?\/?$/i;
+
+/**
+ * Numéro + titre d'épisode, avec préfixe de série optionnel :
+ * - JSON-LD : "TOUGEN ANKI - Épisode 1 : Sang d'Oni"
+ * - lecteur : "Épisode 1 : Sang d'Oni"
+ */
+const EPISODE_LABEL_REGEX = /(?:^|\s[-–—]\s)(?:Épisode|Episode|Folge)\s+(\d+(?:[.,]\d+)?)(?:\s*:\s*(.+))?$/i;
+
+/** "Saison 1" est générique : inutile (et trompeur) pour reconnaître la saison sur AniList */
+const GENERIC_SEASON_REGEX = /^(?:saison|season|staffel)\s+\d+$/i;
+
+// Classes du lecteur video.js d'ADN (plus stables que les classes générées styled-components)
+const SELECTORS = {
+  playerVideo: 'video.vjs-tech',
+  anyVideo: 'video',
+  seriesTitle: '.vjs-meta-title',
+  episodeSubtitle: '.vjs-meta-subtitle',
+} as const;
+
+type ExtractedFields = Omit<EpisodeInfo, 'platform' | 'episodeId' | 'url' | 'seriesId' | 'seriesSlug'>;
+
+const labels = createLabelGuard();
+
+export interface AdnWatchPath {
+  seriesId: string;
+  seriesSlug: string;
+  episodeId: string;
+}
+
+export function parseAdnWatchPath(pathname: string): AdnWatchPath | null {
+  const match = WATCH_PATH_REGEX.exec(pathname);
+  return match ? { seriesId: match[1], seriesSlug: match[2].toLowerCase(), episodeId: match[3] } : null;
+}
+
+export function parseAdnEpisodeLabel(label: string | null): { number: number | null; title: string | null } {
+  const match = label ? EPISODE_LABEL_REGEX.exec(label) : null;
+  if (!match) return { number: null, title: label };
+  return { number: toNumber(match[1]), title: cleanText(match[2]) };
+}
+
+/** Nom de saison exploitable pour la correspondance AniList, null s'il est générique ("Saison 1") */
+export function meaningfulSeasonTitle(name: string | null): string | null {
+  return name && !GENERIC_SEASON_REGEX.test(name) ? name : null;
+}
+
+// ─── Stratégies d'extraction ──────────────────────────────────────────────
+
+/**
+ * 1. JSON-LD schema.org. Structure vérifiée le 2026-09-30 :
+ *    { "@type": "TVEpisode", name: "TOUGEN ANKI - Épisode 1 : Sang d'Oni", episodeNumber: "1",
+ *      video: { url: ".../29344-episode-1" }, partOfSeries: { name: "TOUGEN ANKI" },
+ *      partOfSeason: { name: "Saison 1", seasonNumber: "1" } }
+ */
+function extractFromJsonLd(episodeId: string): ExtractedFields | null {
+  for (const node of readJsonLdNodes('TVEpisode')) {
+    // Navigation SPA : le JSON-LD peut encore décrire l'épisode précédent, vérifié via ses URLs
+    const video = isRecord(node.video) ? node.video : {};
+    const urls = [node.url, node['@id'], video.url].map(cleanText).filter((u): u is string => u !== null);
+    if (urls.length > 0 && !urls.some((u) => u.includes(`/${episodeId}-`) || u.endsWith(`/${episodeId}`))) continue;
+
+    const series = isRecord(node.partOfSeries) ? node.partOfSeries : {};
+    const season = isRecord(node.partOfSeason) ? node.partOfSeason : {};
+    const animeTitle = cleanText(series.name);
+    if (!animeTitle) continue;
+
+    const episodeNumber = toNumber(node.episodeNumber);
+    const label = parseAdnEpisodeLabel(cleanText(node.name));
+    return {
+      animeTitle,
+      seasonNumber: toNumber(season.seasonNumber),
+      seasonTitle: meaningfulSeasonTitle(cleanText(season.name)),
+      seasonEpisodeNumber: episodeNumber,
+      displayedEpisodeNumber: label.number ?? episodeNumber,
+      episodeTitle: label.title,
+    };
+  }
+  return null;
+}
+
+/** 2. Surcouche du lecteur video.js (titre de la série + "Épisode 1 : …"). */
+function extractFromPlayer(episodeId: string): ExtractedFields | null {
+  const animeTitle = cleanText(document.querySelector(SELECTORS.seriesTitle)?.textContent);
+  if (!animeTitle) return null;
+
+  const label = parseAdnEpisodeLabel(cleanText(document.querySelector(SELECTORS.episodeSubtitle)?.textContent));
+  if (labels.isStale(episodeId, labelKey(label.number, label.title))) return null; // Épisode précédent encore affiché
+
+  return {
+    animeTitle,
+    seasonNumber: null,
+    seasonTitle: null,
+    seasonEpisodeNumber: null,
+    displayedEpisodeNumber: label.number,
+    episodeTitle: label.title,
+  };
+}
+
+const STRATEGIES = [
+  { name: 'JSON-LD', run: extractFromJsonLd },
+  { name: 'lecteur', run: extractFromPlayer },
+] as const;
+
+// ─── Adapter ──────────────────────────────────────────────────────────────
+
+export const adnAdapter: StreamingAdapter = {
+  platform: 'adn',
+
+  supportsHost(hostname) {
+    return hostname === 'animationdigitalnetwork.com' || hostname.endsWith('.animationdigitalnetwork.com');
+  },
+
+  getEpisodeId(url) {
+    return parseAdnWatchPath(url.pathname)?.episodeId ?? null;
+  },
+
+  extractEpisodeInfo(url) {
+    const path = parseAdnWatchPath(url.pathname);
+    if (!path) return null;
+
+    for (const strategy of STRATEGIES) {
+      const fields = strategy.run(path.episodeId);
+      if (fields) {
+        labels.remember(path.episodeId, labelKey(fields.displayedEpisodeNumber, fields.episodeTitle));
+        log.info(`Métadonnées extraites via ${strategy.name}`);
+        return { platform: 'adn', episodeId: path.episodeId, seriesId: path.seriesId, seriesSlug: path.seriesSlug, url: url.href, ...fields };
+      }
+    }
+    return null;
+  },
+
+  findVideo() {
+    return (
+      document.querySelector<HTMLVideoElement>(SELECTORS.playerVideo) ?? document.querySelector<HTMLVideoElement>(SELECTORS.anyVideo)
+    );
+  },
+
+  // Pas de données de générique connues chez ADN : complétion au pourcentage (réglable dans les options)
+};

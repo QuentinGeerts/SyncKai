@@ -3,6 +3,8 @@ import {
   applyMapping,
   mappingFromManualChoice,
   mappingKey,
+  matchAdnLink,
+  matchPlatformLink,
   matchCrunchyrollLink,
   normalizeTitle,
   resolveTarget,
@@ -214,5 +216,28 @@ describe('seasonLabel', () => {
     expect(seasonLabel({ animeTitle: 'One Piece', seasonNumber: 24, seasonTitle: 'Elbaph' })).toBe('One Piece · S24 (Elbaph)');
     expect(seasonLabel({ animeTitle: 'Frieren', seasonNumber: 1, seasonTitle: 'Frieren' })).toBe('Frieren · S1');
     expect(seasonLabel({ animeTitle: 'Film', seasonNumber: null, seasonTitle: null })).toBe('Film');
+  });
+});
+
+describe('matchAdnLink / matchPlatformLink', () => {
+  it('reconnaît une fiche liée à la série ADN par identifiant ou slug', () => {
+    expect(matchAdnLink('https://animationdigitalnetwork.com/video/1311-tougen-anki', '1311', 'tougen-anki')).toBe('id');
+    expect(matchAdnLink('https://animationdigitalnetwork.fr/video/tougen-anki', '1311', 'tougen-anki')).toBe('slug');
+  });
+
+  it('rejette un identifiant différent même avec le même slug (autre série ADN)', () => {
+    expect(matchAdnLink('https://animationdigitalnetwork.fr/video/999-tougen-anki', '1311', 'tougen-anki')).toBeNull();
+  });
+
+  it('rejette une autre série ou un autre site', () => {
+    expect(matchAdnLink('https://animationdigitalnetwork.com/video/1400-autre-serie', '1311', 'tougen-anki')).toBeNull();
+    expect(matchAdnLink('https://www.crunchyroll.com/series/1311/tougen-anki', '1311', 'tougen-anki')).toBeNull();
+    expect(matchAdnLink('https://animationdigitalnetwork.com/catalog', '1311', 'tougen-anki')).toBeNull();
+  });
+
+  it('choisit la règle selon la plateforme de l’épisode', () => {
+    const adnUrl = 'https://animationdigitalnetwork.com/video/1311-tougen-anki';
+    expect(matchPlatformLink(adnUrl, 'adn', '1311', 'tougen-anki')).toBe('id');
+    expect(matchPlatformLink(adnUrl, 'crunchyroll', 'GP5HJ84D2', 'tougen-anki')).toBeNull();
   });
 });

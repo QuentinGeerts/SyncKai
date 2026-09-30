@@ -1,6 +1,6 @@
 import { isRecord } from './guards';
 
-export type StreamingPlatform = 'crunchyroll';
+export type StreamingPlatform = 'crunchyroll' | 'adn';
 
 /**
  * Épisode détecté sur une plateforme de streaming.
@@ -30,7 +30,7 @@ export interface EpisodeInfo {
   url: string;
 }
 
-const PLATFORMS: Record<StreamingPlatform, true> = { crunchyroll: true };
+const PLATFORMS: Record<StreamingPlatform, true> = { crunchyroll: true, adn: true };
 
 const isNullableNumber = (v: unknown): v is number | null => v === null || typeof v === 'number';
 const isNullableString = (v: unknown): v is string | null => v === null || typeof v === 'string';

@@ -1,17 +1,17 @@
 # SyncKai
 
-Extension de navigateur (Manifest V3) qui détecte les épisodes regardés sur Crunchyroll et met à jour automatiquement ta liste **AniList**, sans action manuelle.
+Extension de navigateur (Manifest V3) qui détecte les épisodes regardés sur Crunchyroll et ADN, et met à jour automatiquement ta liste **AniList**, sans action manuelle.
 
 ## Fonctionnalités
 
 - Connexion à AniList en un clic depuis le popup.
-- Détection de l'épisode en cours sur Crunchyroll, y compris lors du passage à l'épisode suivant.
-- Synchronisation au début du générique de fin (ou à 85 % si l'information n'est pas disponible).
+- Détection de l'épisode en cours sur Crunchyroll et ADN (Animation Digital Network), y compris lors du passage à l'épisode suivant.
+- Synchronisation au début du générique de fin quand la plateforme le fournit (Crunchyroll), sinon à un pourcentage réglable (85 % par défaut).
 - Toast de confirmation directement sur la page, même en plein écran.
 - Choix manuel de la fiche AniList quand la correspondance est incertaine, et correction des dernières synchros.
 - Page d'options : pause, mode de déclenchement (générique ou pourcentage), toasts, gestion des correspondances mémorisées.
 
-Plateformes prises en charge : Crunchyroll. Service de suivi : AniList.
+Plateformes prises en charge : Crunchyroll, ADN. Service de suivi : AniList.
 
 ## Installation (développement)
 

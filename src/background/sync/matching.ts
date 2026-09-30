@@ -1,4 +1,4 @@
-import type { EpisodeInfo } from '../../shared/episode.types';
+import type { EpisodeInfo, StreamingPlatform } from '../../shared/episode.types';
 import type { MediaMapping, NumberingMode } from '../../shared/sync.types';
 
 /** Formats AniList considérés comme des "saisons" (exclut films, OVA, spéciaux, clips) */
@@ -77,6 +77,41 @@ export function seasonLabel(episode: Pick<EpisodeInfo, 'animeTitle' | 'seasonNum
   const season = episode.seasonNumber !== null ? ` · S${episode.seasonNumber}` : '';
   const hasDistinctTitle = episode.seasonTitle && normalizeTitle(episode.seasonTitle) !== normalizeTitle(episode.animeTitle);
   return `${episode.animeTitle}${season}${hasDistinctTitle ? ` (${episode.seasonTitle})` : ''}`;
+}
+
+/**
+ * Lien ADN : /video/{seriesId}-{slug} (actuel) ou /video/{slug} (ancien format),
+ * sur animationdigitalnetwork.com / .fr / .de.
+ */
+export function matchAdnLink(url: string, seriesId: string | null, seriesSlug: string | null): LinkKind {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (!/(^|\.)animationdigitalnetwork\.(com|fr|de)$/i.test(parsed.hostname)) return null;
+
+  const segments = parsed.pathname.toLowerCase().split('/').filter(Boolean);
+  const series = segments[segments.indexOf('video') + 1];
+  if (!segments.includes('video') || !series) return null;
+  const [, linkedId, linkedSlug] = /^(?:(\d+)-)?(.+)$/.exec(series) ?? [];
+  if (linkedId !== undefined) {
+    // Identifiant explicite : il fait foi (un slug identique avec un autre identifiant est une autre série)
+    return seriesId !== null && linkedId === seriesId ? 'id' : null;
+  }
+  // Ancien format sans identifiant : comparaison du slug
+  return seriesSlug && linkedSlug === seriesSlug ? 'slug' : null;
+}
+
+/** Lien d'une fiche AniList vers la série de la plateforme de l'épisode */
+export function matchPlatformLink(url: string, platform: StreamingPlatform, seriesId: string | null, seriesSlug: string | null): LinkKind {
+  switch (platform) {
+    case 'crunchyroll':
+      return matchCrunchyrollLink(url, seriesId, seriesSlug);
+    case 'adn':
+      return matchAdnLink(url, seriesId, seriesSlug);
+  }
 }
 
 /** Clé de cache d'une saison : "crunchyroll:GRMG8ZQZR:s24" */

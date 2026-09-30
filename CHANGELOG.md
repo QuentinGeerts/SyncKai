@@ -3,6 +3,17 @@
 Toutes les évolutions notables de SyncKai sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions selon [SemVer](https://semver.org/lang/fr/).
 
+## [Non publié]
+
+### Ajouté
+
+- **Adapter ADN** (animationdigitalnetwork.com) : détection des épisodes (JSON-LD, repli sur le lecteur video.js), navigation entre épisodes sans rechargement, complétion au pourcentage réglé (ADN ne fournit pas le début du générique).
+- Correspondance AniList via les liens ADN des fiches (`/video/{id}-{slug}`, ancien format par slug).
+
+### Modifié
+
+- Helpers de lecture (JSON-LD, texte, garde-fou anti-données périmées) partagés entre les adapters.
+
 ## [1.1.0] - 2026-09-30
 
 ### Ajouté

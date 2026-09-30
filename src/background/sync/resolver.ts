@@ -6,7 +6,7 @@ import {
   applyMapping,
   mappingKey,
   seasonLabel,
-  matchCrunchyrollLink,
+  matchPlatformLink,
   normalizeTitle,
   resolveTarget,
   SERIES_FORMATS,
@@ -44,7 +44,7 @@ async function collectCandidates(episode: EpisodeInfo): Promise<CollectedCandida
   const links = new Map<number, LinkKind>();
 
   const linkOf = (media: AniListMedia): LinkKind =>
-    media.externalLinkUrls.map((url) => matchCrunchyrollLink(url, episode.seriesId, episode.seriesSlug)).find((k) => k !== null) ?? null;
+    media.externalLinkUrls.map((url) => matchPlatformLink(url, episode.platform, episode.seriesId, episode.seriesSlug)).find((k) => k !== null) ?? null;
   const add = (list: AniListMedia[], fallback: LinkKind = null): void => {
     for (const media of list) {
       mediaById.set(media.id, media);
