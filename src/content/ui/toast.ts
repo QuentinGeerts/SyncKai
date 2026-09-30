@@ -107,6 +107,11 @@ export function showToast(content: ToastContent, autoHideMs?: number): ToastHand
 
   const handle: ToastHandle = {
     update(next, hideAfterMs) {
+      // Toast déjà fermé (ex : clic sur × pendant la synchro) : une alerte doit quand même apparaître
+      if (controller.signal.aborted) {
+        if (next.tone === 'warning' || next.tone === 'error') showToast(next, hideAfterMs);
+        return;
+      }
       toast.className = `toast visible ${next.tone}`;
       icon.textContent = ICONS[next.tone];
       title.textContent = next.title;

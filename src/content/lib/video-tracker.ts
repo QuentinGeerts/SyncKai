@@ -1,4 +1,4 @@
-import { formatTimecode, resolveCompletionPoint } from './completion';
+import { canComplete, formatTimecode, resolveCompletionPoint } from './completion';
 import type { Logger } from './logger';
 
 interface VideoTrackerOptions {
@@ -25,6 +25,10 @@ export function trackVideoProgress(video: HTMLVideoElement, options: VideoTracke
   let progressController: AbortController | null = null;
   let lastLoggedDecile = -1;
   let lastLoggedPoint = '';
+  /** Lecture observée avant le point de fin depuis l'armement */
+  let seenBeforePoint = false;
+  /** Source chargée (loadstart) après le début du suivi : elle appartient forcément à cet épisode */
+  let hasFreshSource = false;
 
   const onTimeUpdate = (): void => {
     const { currentTime, duration } = video;
@@ -47,7 +51,8 @@ export function trackVideoProgress(video: HTMLVideoElement, options: VideoTracke
       logger.info(`Progression : ${Math.round((currentTime / duration) * 100)} % (${formatTimecode(currentTime)})`);
     }
 
-    if (currentTime >= point.seconds) {
+    if (currentTime < point.seconds) seenBeforePoint = true;
+    if (canComplete(currentTime, point.seconds, seenBeforePoint, hasFreshSource)) {
       logger.info(`Fin d’épisode atteinte (${pointLabel})`);
       disarm();
       onCompleted();
@@ -58,6 +63,7 @@ export function trackVideoProgress(video: HTMLVideoElement, options: VideoTracke
     disarm();
     lastLoggedDecile = -1;
     lastLoggedPoint = '';
+    seenBeforePoint = false;
     progressController = new AbortController();
     // Le signal combiné garantit le nettoyage même si la session est détruite
     const combined = AbortSignal.any([signal, progressController.signal]);
@@ -73,6 +79,7 @@ export function trackVideoProgress(video: HTMLVideoElement, options: VideoTracke
     'loadstart',
     () => {
       logger.info('Nouvelle source vidéo : suivi réarmé');
+      hasFreshSource = true;
       arm();
     },
     { signal },

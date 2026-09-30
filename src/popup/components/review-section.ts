@@ -17,42 +17,44 @@ export function createReviewSection(actions: ReviewActions): ReviewSection {
   const list = h('div', { class: 'flex flex-col gap-2' });
   const element = h('section', { class: 'flex flex-col gap-2' }, title, list);
   let pendingCount = 0;
+  /** Dernière liste reçue : réappliquée quand une carte occupée se ferme (une vérification a pu arriver entre-temps) */
+  let lastReviews: PendingReview[] = [];
 
   function refreshChrome(): void {
     title.textContent = `À vérifier (${pendingCount})`;
     element.hidden = cards.size === 0;
   }
 
-  return {
-    element,
-    update(reviews) {
-      const keys = new Set(reviews.map((r) => r.key));
-      pendingCount = reviews.length;
+  function update(reviews: PendingReview[]): void {
+    lastReviews = reviews;
+    const keys = new Set(reviews.map((r) => r.key));
+    pendingCount = reviews.length;
 
-      // Cartes disparues du stockage (ignorées, résolues ailleurs) — sauf celles qui affichent un résultat
-      for (const [key, card] of cards) {
-        if (!keys.has(key) && !card.isBusy()) {
-          card.element.remove();
-          cards.delete(key);
-        }
+    // Cartes disparues du stockage (ignorées, résolues ailleurs) — sauf celles qui affichent un résultat
+    for (const [key, card] of cards) {
+      if (!keys.has(key) && !card.isBusy()) {
+        card.element.remove();
+        cards.delete(key);
       }
+    }
 
-      // Nouvelles cartes en tête (reviews est trié du plus récent au plus ancien)
-      for (const review of [...reviews].reverse()) {
-        const existing = cards.get(review.key);
-        if (existing) {
-          existing.update(review);
-          continue;
-        }
-        const card = createReviewCard(review, actions, () => {
-          cards.delete(review.key);
-          refreshChrome();
-        });
-        cards.set(review.key, card);
-        list.prepend(card.element);
+    // Nouvelles cartes en tête (reviews est trié du plus récent au plus ancien)
+    for (const review of [...reviews].reverse()) {
+      const existing = cards.get(review.key);
+      if (existing) {
+        existing.update(review);
+        continue;
       }
+      const card = createReviewCard(review, actions, () => {
+        cards.delete(review.key);
+        update(lastReviews);
+      });
+      cards.set(review.key, card);
+      list.prepend(card.element);
+    }
 
-      refreshChrome();
-    },
-  };
+    refreshChrome();
+  }
+
+  return { element, update };
 }

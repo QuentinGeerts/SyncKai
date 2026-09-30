@@ -5,6 +5,7 @@ import { h, nodes } from '../ui/dom';
 import { icon } from '../ui/icons';
 
 const SAVED_BADGE_MS = 1_500;
+const SAVED_BADGE_CLASS = 'flex items-center gap-1 text-xs text-emerald-400 transition-opacity';
 
 function getRoot(): HTMLDivElement {
   const el = document.querySelector<HTMLDivElement>('#app');
@@ -64,15 +65,23 @@ function renderRadio(name: string, value: string, checked: boolean, title: strin
 
 function createSettingsCard(initial: SyncSettings): HTMLElement {
   let settings = initial;
-  const savedBadge = h('span', { class: 'flex items-center gap-1 text-xs text-emerald-400 opacity-0 transition-opacity', attrs: { 'aria-live': 'polite' } });
+  const savedBadge = h('span', { class: `${SAVED_BADGE_CLASS} opacity-0`, attrs: { 'aria-live': 'polite' } });
   let badgeTimer: ReturnType<typeof setTimeout> | undefined;
 
   async function update(patch: Partial<SyncSettings>): Promise<void> {
     settings = { ...settings, ...patch };
-    await saveSettings(settings);
-    savedBadge.replaceChildren(icon('check', 'h-3.5 w-3.5'), 'Enregistré');
-    savedBadge.classList.remove('opacity-0');
     clearTimeout(badgeTimer);
+    try {
+      await saveSettings(settings);
+    } catch (error: unknown) {
+      // Affiché jusqu'au prochain enregistrement réussi : l'interface ne reflète plus le stockage
+      console.error('[SyncKai] Enregistrement des réglages impossible :', error);
+      savedBadge.className = SAVED_BADGE_CLASS.replace('text-emerald-400', 'text-red-400');
+      savedBadge.replaceChildren(icon('alert', 'h-3.5 w-3.5'), 'Échec de l’enregistrement, recharge la page');
+      return;
+    }
+    savedBadge.className = SAVED_BADGE_CLASS;
+    savedBadge.replaceChildren(icon('check', 'h-3.5 w-3.5'), 'Enregistré');
     badgeTimer = setTimeout(() => savedBadge.classList.add('opacity-0'), SAVED_BADGE_MS);
   }
 

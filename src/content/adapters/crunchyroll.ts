@@ -27,7 +27,9 @@ const SKIP_EVENTS_URL = 'https://static.crunchyroll.com/skip-events/production';
 // ⚠️ Sélecteurs DOM (repli si le JSON-LD est absent) à valider sur le site réel :
 // Crunchyroll modifie régulièrement ses classes CSS ; les attributs data-t sont plus stables.
 const SELECTORS = {
-  video: 'video[id^="bitmovinplayer-video"], video',
+  // Deux sélecteurs interrogés dans l'ordre (une liste "a, b" renverrait le premier dans le DOM)
+  playerVideo: 'video[id^="bitmovinplayer-video"]',
+  anyVideo: 'video',
   seriesLink: '[data-t="show-title-link"], a.show-title-link',
   episodeHeading: 'h1.title, [data-t="episode-title"], h1',
   jsonLd: 'script[type="application/ld+json"]',
@@ -180,7 +182,9 @@ export const crunchyrollAdapter: StreamingAdapter = {
   },
 
   findVideo() {
-    return document.querySelector<HTMLVideoElement>(SELECTORS.video);
+    return (
+      document.querySelector<HTMLVideoElement>(SELECTORS.playerVideo) ?? document.querySelector<HTMLVideoElement>(SELECTORS.anyVideo)
+    );
   },
 
   /**

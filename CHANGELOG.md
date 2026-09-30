@@ -18,6 +18,17 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), ver
 ### Modifié
 
 - Limite de requêtes AniList (429) : nouvelle tentative automatique si AniList demande une attente courte (≤ 20 s).
+- Version minimale de Chrome : 116.
+
+### Corrigé
+
+- L'épisode suivant pouvait être marqué comme vu dès la navigation (derniers instants de l'épisode précédent pris en compte).
+- Une correction sur la même fiche AniList ne pouvait pas faire baisser la progression.
+- Une vérification arrivée pendant l'affichage d'un résultat n'apparaissait qu'à la réouverture du popup.
+- Écritures concurrentes du stockage (popup, options, synchronisation) pouvant s'écraser mutuellement.
+- Les alertes n'apparaissaient plus si le toast « Synchronisation… » avait été fermé.
+- Le lecteur Crunchyroll n'était pas prioritaire sur une autre balise `<video>` de la page.
+- Erreurs silencieuses : réponse de secours du service worker, échec d'enregistrement des réglages ou de « Ignorer » désormais affichés.
 
 ## [1.0.0] - 2026-09-30
 

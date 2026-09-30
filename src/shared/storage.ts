@@ -6,6 +6,16 @@ import { isMediaMapping, type MediaMapping } from './sync.types';
 
 const MAX_PENDING_REVIEWS = 20;
 const MAX_RECENT_SYNCS = 5;
+const STORAGE_LOCK = 'synckai:storage';
+
+/**
+ * Sérialise les lectures-modifications-écritures du stockage. Le popup, la page d'options et le
+ * service worker partagent l'origine chrome-extension:// : le même verrou Web Locks les coordonne,
+ * ce qui évite qu'une écriture en écrase une autre (ex : "Ignorer" pendant une synchro).
+ */
+function withStorageLock<T>(task: () => Promise<T>): Promise<T> {
+  return navigator.locks.request(STORAGE_LOCK, task);
+}
 
 /** Clés utilisées dans chrome.storage.local */
 export const STORAGE_KEYS = {
@@ -49,18 +59,22 @@ export async function getMediaMapping(key: string): Promise<MediaMapping | null>
   return (await getMediaMappings())[key] ?? null;
 }
 
-export async function saveMediaMapping(key: string, mapping: MediaMapping): Promise<void> {
-  const mappings = await getMediaMappings();
-  await chrome.storage.local.set({ [STORAGE_KEYS.mediaMappings]: { ...mappings, [key]: mapping } });
+export function saveMediaMapping(key: string, mapping: MediaMapping): Promise<void> {
+  return withStorageLock(async () => {
+    const mappings = await getMediaMappings();
+    await chrome.storage.local.set({ [STORAGE_KEYS.mediaMappings]: { ...mappings, [key]: mapping } });
+  });
 }
 
-export async function deleteMediaMapping(key: string): Promise<void> {
-  const { [key]: _removed, ...rest } = await getMediaMappings();
-  await chrome.storage.local.set({ [STORAGE_KEYS.mediaMappings]: rest });
+export function deleteMediaMapping(key: string): Promise<void> {
+  return withStorageLock(async () => {
+    const { [key]: _removed, ...rest } = await getMediaMappings();
+    await chrome.storage.local.set({ [STORAGE_KEYS.mediaMappings]: rest });
+  });
 }
 
-export async function clearMediaMappings(): Promise<void> {
-  await chrome.storage.local.remove(STORAGE_KEYS.mediaMappings);
+export function clearMediaMappings(): Promise<void> {
+  return withStorageLock(() => chrome.storage.local.remove(STORAGE_KEYS.mediaMappings));
 }
 
 // ─── Vérifications manuelles & dernières synchros (propres à l'utilisateur) ───
@@ -73,14 +87,18 @@ export async function getPendingReviews(): Promise<PendingReview[]> {
 }
 
 /** Ajoute ou remplace la carte d'une saison (une seule par clé : le dernier épisode l'emporte). */
-export async function savePendingReview(review: PendingReview): Promise<void> {
-  const others = (await getPendingReviews()).filter((r) => r.key !== review.key);
-  await chrome.storage.local.set({ [STORAGE_KEYS.pendingReviews]: [review, ...others].slice(0, MAX_PENDING_REVIEWS) });
+export function savePendingReview(review: PendingReview): Promise<void> {
+  return withStorageLock(async () => {
+    const others = (await getPendingReviews()).filter((r) => r.key !== review.key);
+    await chrome.storage.local.set({ [STORAGE_KEYS.pendingReviews]: [review, ...others].slice(0, MAX_PENDING_REVIEWS) });
+  });
 }
 
-export async function deletePendingReview(key: string): Promise<void> {
-  const remaining = (await getPendingReviews()).filter((r) => r.key !== key);
-  await chrome.storage.local.set({ [STORAGE_KEYS.pendingReviews]: remaining });
+export function deletePendingReview(key: string): Promise<void> {
+  return withStorageLock(async () => {
+    const remaining = (await getPendingReviews()).filter((r) => r.key !== key);
+    await chrome.storage.local.set({ [STORAGE_KEYS.pendingReviews]: remaining });
+  });
 }
 
 /** Dernières synchros, la plus récente en premier */
@@ -91,17 +109,21 @@ export async function getRecentSyncs(): Promise<RecentSync[]> {
 }
 
 /** Une entrée par saison : la synchro la plus récente remplace la précédente. */
-export async function addRecentSync(sync: RecentSync): Promise<void> {
-  const others = (await getRecentSyncs()).filter((s) => s.key !== sync.key);
-  await chrome.storage.local.set({ [STORAGE_KEYS.recentSyncs]: [sync, ...others].slice(0, MAX_RECENT_SYNCS) });
+export function addRecentSync(sync: RecentSync): Promise<void> {
+  return withStorageLock(async () => {
+    const others = (await getRecentSyncs()).filter((s) => s.key !== sync.key);
+    await chrome.storage.local.set({ [STORAGE_KEYS.recentSyncs]: [sync, ...others].slice(0, MAX_RECENT_SYNCS) });
+  });
 }
 
 /** Supprime les données de session AniList : token, profil, vérifications et synchros de l'utilisateur. */
-export async function clearAniListSession(): Promise<void> {
-  await chrome.storage.local.remove([
+export function clearAniListSession(): Promise<void> {
+  return withStorageLock(() =>
+    chrome.storage.local.remove([
     STORAGE_KEYS.anilistToken,
     STORAGE_KEYS.anilistViewer,
     STORAGE_KEYS.pendingReviews,
-    STORAGE_KEYS.recentSyncs,
-  ]);
+      STORAGE_KEYS.recentSyncs,
+    ]),
+  );
 }

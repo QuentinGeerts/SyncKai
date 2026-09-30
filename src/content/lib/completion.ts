@@ -17,6 +17,16 @@ export function resolveCompletionPoint(duration: number, creditsStart: number | 
   return isPlausible ? { seconds: creditsStart, source: 'credits' } : { seconds: duration * fallbackRatio, source: 'ratio' };
 }
 
+/**
+ * Garde-fou contre les fausses complétions : après une navigation SPA, le tracker du nouvel épisode
+ * reçoit encore quelques ticks de l'ancienne source (déjà au-delà du point de fin).
+ * On n'accepte donc la complétion que si la lecture a été vue avant le point de fin,
+ * ou si le lecteur a chargé une nouvelle source depuis le début du suivi.
+ */
+export function canComplete(currentTime: number, pointSeconds: number, seenBeforePoint: boolean, hasFreshSource: boolean): boolean {
+  return currentTime >= pointSeconds && (seenBeforePoint || hasFreshSource);
+}
+
 /** 1344 → "22:24" */
 export function formatTimecode(seconds: number): string {
   const total = Math.max(0, Math.floor(seconds));

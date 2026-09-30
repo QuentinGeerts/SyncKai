@@ -30,3 +30,17 @@ describe('decideListUpdate', () => {
     expect(decideListUpdate({ status: 'REPEATING', progress: 2 }, 3, 12)).toEqual({ action: 'skip', reason: 'repeating' });
   });
 });
+
+describe('decideListUpdate — correction manuelle sur la même fiche', () => {
+  it('autorise un recul de progression (régression)', () => {
+    expect(decideListUpdate({ status: 'CURRENT', progress: 15 }, 3, 24, true)).toEqual({ action: 'update', progress: 3, status: 'CURRENT' });
+  });
+
+  it('corrige une fiche marquée terminée à tort', () => {
+    expect(decideListUpdate({ status: 'COMPLETED', progress: 12 }, 5, 12, true)).toEqual({ action: 'update', progress: 5, status: 'CURRENT' });
+  });
+
+  it('ne réécrit pas une valeur identique', () => {
+    expect(decideListUpdate({ status: 'CURRENT', progress: 4 }, 4, 12, true)).toEqual({ action: 'skip', reason: 'up-to-date' });
+  });
+});

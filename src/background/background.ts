@@ -22,6 +22,16 @@ chrome.runtime.onStartup.addListener((): void => {
   void refreshReviewBadge();
 });
 
+/** Réponse de secours par type de message si un handler lève une exception inattendue */
+const UNEXPECTED_ERRORS: { [K in MessageType]: MessageResponse<K> } = {
+  LOGIN_ANILIST: { ok: false, code: 'UNKNOWN', message: 'Erreur inattendue.' },
+  GET_VIEWER: { ok: false, code: 'API_ERROR', message: 'Erreur inattendue.' },
+  EPISODE_COMPLETED: { status: 'error', message: 'Erreur inattendue pendant la synchronisation.' },
+  SEARCH_ANIME: { ok: false, code: 'API_ERROR', message: 'Erreur inattendue.' },
+  RESOLVE_REVIEW: { status: 'error', message: 'Erreur inattendue pendant la synchronisation.' },
+  REOPEN_REVIEW: { ok: false, code: 'API_ERROR', message: 'Erreur inattendue.' },
+};
+
 type MessageHandlers = {
   [K in MessageType]: (payload: MessagePayload<K>, sender: chrome.runtime.MessageSender) => Promise<MessageResponse<K>>;
 };
@@ -63,7 +73,12 @@ chrome.runtime.onMessage.addListener(
       return false;
     }
 
-    void dispatch(message, sender).then(sendResponse);
+    dispatch(message, sender)
+      .then(sendResponse)
+      .catch((error: unknown) => {
+        console.error('[SyncKai] Erreur non gérée pour', message.type, error);
+        sendResponse(UNEXPECTED_ERRORS[message.type]);
+      });
     return true; // Garde le canal ouvert pour la réponse asynchrone
   },
 );

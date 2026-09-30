@@ -57,8 +57,14 @@ async function queueReview(review: PendingReview): Promise<void> {
  * au choix manuel et à la correction. Seules les écritures réelles sont ajoutées aux "dernières synchros"
  * (un épisode déjà vu ou un anime terminé n'a rien modifié : rien à corriger).
  */
-async function writeProgress(key: string, episode: EpisodeInfo, info: MediaListInfo, progress: number): Promise<SyncOutcome> {
-  const decision = decideListUpdate(info.entry, progress, info.episodes);
+async function writeProgress(
+  key: string,
+  episode: EpisodeInfo,
+  info: MediaListInfo,
+  progress: number,
+  isCorrection = false,
+): Promise<SyncOutcome> {
+  const decision = decideListUpdate(info.entry, progress, info.episodes, isCorrection);
 
   let outcome: SyncOutcome;
   if (decision.action === 'skip') {
@@ -84,9 +90,8 @@ async function writeProgress(key: string, episode: EpisodeInfo, info: MediaListI
 
 /** Synchronise un épisode terminé avec la liste AniList de l'utilisateur. Ne lève jamais. */
 export async function syncEpisode(episode: EpisodeInfo): Promise<SyncOutcome> {
-  if (!(await getValidToken())) return { status: 'not-connected' };
-
   try {
+    if (!(await getValidToken())) return { status: 'not-connected' };
     const key = mappingKey(episode);
     const { result, candidates } = await resolveEpisode(episode);
 
@@ -128,7 +133,9 @@ export async function resolveReview({ key, mediaId, progress }: ResolveReviewPay
 
     await saveMediaMapping(key, { ...mapping, seriesLabel: seasonLabel(review.episode), mediaTitle: info.title });
     console.info(LOG_PREFIX, `Correspondance manuelle enregistrée pour ${key} :`, mapping);
-    return await writeProgress(key, review.episode, info, progress);
+    // Correction sur la fiche déjà utilisée : la valeur choisie remplace celle écrite (même plus basse)
+    const isCorrection = review.previous?.mediaId === mediaId;
+    return await writeProgress(key, review.episode, info, progress, isCorrection);
   } catch (error: unknown) {
     return toErrorOutcome(error);
   }

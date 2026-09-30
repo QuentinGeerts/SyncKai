@@ -224,7 +224,7 @@ export function createReviewCard(initial: PendingReview, actions: ReviewActions,
           {
             class: 'cursor-pointer rounded-md px-2 py-1 text-xs font-medium text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 disabled:opacity-50',
             attrs: { type: 'button', ...(isSubmitting ? { disabled: '' } : {}) },
-            on: { click: () => void actions.dismiss(review.key) },
+            on: { click: () => void dismiss() },
           },
           'Ignorer',
         ),
@@ -288,6 +288,16 @@ export function createReviewCard(initial: PendingReview, actions: ReviewActions,
     render();
     // Avec une note à lire, la carte reste affichée jusqu'au clic sur "Fermer"
     if (!note) closeTimer = setTimeout(close, RESULT_VISIBLE_MS);
+  }
+
+  async function dismiss(): Promise<void> {
+    try {
+      await actions.dismiss(review.key);
+    } catch (error: unknown) {
+      console.error('[SyncKai] Impossible d’ignorer la vérification :', error);
+      feedback = { tone: 'error', title: 'Action impossible', message: 'La vérification n’a pas pu être ignorée. Réessaie.' };
+      render();
+    }
   }
 
   function close(): void {
