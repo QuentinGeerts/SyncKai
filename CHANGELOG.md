@@ -13,6 +13,7 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), ver
 ### Modifié
 
 - Helpers de lecture (JSON-LD, texte, garde-fou anti-données périmées) partagés entre les adapters.
+- Raison « à vérifier » explicite quand la fiche AniList n'a été trouvée que par son titre (aucun lien vers la plateforme).
 
 ## [1.1.0] - 2026-09-30
 

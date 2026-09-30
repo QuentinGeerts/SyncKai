@@ -208,7 +208,16 @@ export function resolveTarget(episode: EpisodeNumbers, candidates: MediaCandidat
     reason: string,
   ): ResolveResult => ({
     ok: true,
-    target: { mediaId: candidate.id, numbering, offset: base - progress, episodes: candidate.episodes, progress, confidence, reason },
+    target: {
+      mediaId: candidate.id,
+      numbering,
+      offset: base - progress,
+      episodes: candidate.episodes,
+      progress,
+      confidence,
+      // Sans lien plateforme, c'est l'absence de lien (et non la règle appliquée) qui rend le choix incertain
+      reason: linked.length === 0 ? 'Fiche trouvée par son titre uniquement (aucun lien vers la plateforme sur AniList)' : reason,
+    },
   });
 
   // 1. Fiche unique (ex : One Piece, une seule entrée AniList)

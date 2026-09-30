@@ -154,7 +154,10 @@ describe('resolveTarget', () => {
       candidate({ id: 1, link: null, titles: ['Sousou no Frieren', 'Frieren'] }),
       candidate({ id: 2, link: null, titles: ['Frieren: Beyond Journey’s End Mini Anime'] }),
     ]);
-    expect(result).toMatchObject({ ok: true, target: { mediaId: 1, confidence: 'low' } });
+    expect(result).toMatchObject({
+      ok: true,
+      target: { mediaId: 1, confidence: 'low', reason: expect.stringContaining('aucun lien vers la plateforme') },
+    });
   });
 
   it('échoue si aucune fiche ne correspond', () => {
