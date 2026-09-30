@@ -1,19 +1,28 @@
 import type { EpisodeInfo } from '../../shared/episode.types';
 import { sendMessage } from '../../shared/messages';
+import { DEFAULT_SETTINGS, getSettings, type SyncSettings } from '../../shared/settings';
 import type { StreamingAdapter } from '../adapters/adapter';
 import { ALERT_TOAST_MS, toastForOutcome } from '../ui/sync-toast';
-import { showToast } from '../ui/toast';
+import { showToast, type ToastContent } from '../ui/toast';
 import { createLogger } from './logger';
 import { trackVideoProgress } from './video-tracker';
 import { waitFor } from './wait-for';
 
-/** Repli quand le début du générique de fin est inconnu (générique + aperçu ≈ 2-3 min sur 24 min) */
-const FALLBACK_COMPLETION_RATIO = 0.85;
 const MIN_EPISODE_DURATION_S = 120;
 const VIDEO_WAIT_TIMEOUT_MS = 30_000;
 const METADATA_WAIT_TIMEOUT_MS = 15_000;
 
 const log = createLogger('session');
+
+/** Réglages de la page d'options ; valeurs par défaut si le stockage est illisible */
+async function loadSettings(): Promise<SyncSettings> {
+  try {
+    return await getSettings();
+  } catch (error: unknown) {
+    log.warn('Réglages illisibles, valeurs par défaut utilisées :', error);
+    return DEFAULT_SETTINGS;
+  }
+}
 
 /** Résumé lisible sur une ligne (la console tronque les objets) : "One Piece · S24 E25 (affiché E1180) · GE00376431JAJP" */
 function formatEpisode(e: EpisodeInfo): string {
@@ -82,16 +91,30 @@ export function startWatchSession(adapter: StreamingAdapter, episodeId: string):
 
     completionReported = true;
     log.info(`✔ Épisode terminé : ${formatEpisode(episode)}`, episode);
-    const toast = showToast({ tone: 'info', title: 'Synchronisation avec AniList…', message: formatEpisodeShort(episode) });
+
+    // Relus maintenant : une pause activée pendant l'épisode s'applique immédiatement
+    const settings = await loadSettings();
+    if (!settings.autoSync) {
+      log.info('Synchronisation en pause (options) : épisode non envoyé');
+      return;
+    }
+    // Toasts désactivés : seules les alertes (à vérifier, erreurs) restent affichées
+    const toast = settings.showToast
+      ? showToast({ tone: 'info', title: 'Synchronisation avec AniList…', message: formatEpisodeShort(episode) })
+      : null;
+    const notify = (content: ToastContent, autoHideMs: number): void => {
+      if (toast) toast.update(content, autoHideMs);
+      else if (content.tone === 'warning' || content.tone === 'error') showToast(content, autoHideMs);
+    };
     try {
       const outcome = await sendMessage('EPISODE_COMPLETED', episode);
       log.info('Résultat de la synchronisation :', outcome);
       const { content, autoHideMs } = toastForOutcome(outcome);
-      toast.update(content, autoHideMs);
+      notify(content, autoHideMs);
     } catch (error: unknown) {
       completionReported = false;
       log.error('Service worker injoignable :', error);
-      toast.update({ tone: 'error', title: 'SyncKai injoignable', message: 'Recharge la page puis réessaie.' }, ALERT_TOAST_MS);
+      notify({ tone: 'error', title: 'SyncKai injoignable', message: 'Recharge la page puis réessaie.' }, ALERT_TOAST_MS);
     }
   }
 
@@ -104,7 +127,7 @@ export function startWatchSession(adapter: StreamingAdapter, episodeId: string):
     else log.warn('Métadonnées indisponibles pour l’instant, nouvel essai à la fin de l’épisode');
   }
 
-  async function waitForVideo(): Promise<void> {
+  async function waitForVideo(settings: SyncSettings): Promise<void> {
     const video = await waitFor(() => adapter.findVideo(), { signal, timeoutMs: VIDEO_WAIT_TIMEOUT_MS });
     if (signal.aborted) return;
     if (!video) {
@@ -114,7 +137,7 @@ export function startWatchSession(adapter: StreamingAdapter, episodeId: string):
     log.info('Lecteur vidéo trouvé :', video.id || '(sans id)');
 
     trackVideoProgress(video, {
-      fallbackRatio: FALLBACK_COMPLETION_RATIO,
+      fallbackRatio: settings.completionPercentage / 100,
       getCreditsStart: () => creditsStart,
       minDurationSeconds: MIN_EPISODE_DURATION_S,
       onCompleted: () => void reportCompletion(),
@@ -123,11 +146,25 @@ export function startWatchSession(adapter: StreamingAdapter, episodeId: string):
     });
   }
 
+  async function init(): Promise<void> {
+    // Déclenchement fixé pour l'épisode : un changement de réglage s'applique au suivant
+    const settings = await loadSettings();
+    if (signal.aborted) return;
+    log.info(
+      settings.completionTrigger === 'credits'
+        ? `Déclenchement : générique de fin (repli à ${settings.completionPercentage} %)`
+        : `Déclenchement : ${settings.completionPercentage} % de la vidéo`,
+    );
+    if (settings.completionTrigger === 'credits') {
+      void adapter.getCreditsStart?.(episodeId, signal).then((start) => {
+        creditsStart = start;
+      });
+    }
+    await waitForVideo(settings);
+  }
+
   void waitForMetadata();
-  void waitForVideo();
-  void adapter.getCreditsStart?.(episodeId, signal).then((start) => {
-    creditsStart = start;
-  });
+  void init();
 
   return { episodeId, destroy };
 }

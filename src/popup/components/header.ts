@@ -1,4 +1,4 @@
-import { h } from '../lib/dom';
+import { h } from '../../ui/dom';
 import type { PopupState } from '../state';
 
 const STATUS_BADGE: Record<PopupState['status'], { label: string; dot: string }> = {

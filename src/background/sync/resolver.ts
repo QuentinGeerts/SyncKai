@@ -5,6 +5,7 @@ import { getAnimeByIds, searchAnime, type AniListMedia } from '../api/media';
 import {
   applyMapping,
   mappingKey,
+  seasonLabel,
   matchCrunchyrollLink,
   normalizeTitle,
   resolveTarget,
@@ -151,7 +152,8 @@ export async function resolveEpisode(episode: EpisodeInfo): Promise<EpisodeResol
   const result = resolveTarget(episode, candidates);
   if (result.ok && result.target.confidence === 'high') {
     const { mediaId, numbering, offset, episodes } = result.target;
-    await saveMediaMapping(key, { mediaId, numbering, offset, episodes });
+    const mediaTitle = collected.media.find((m) => m.id === mediaId)?.displayTitle;
+    await saveMediaMapping(key, { mediaId, numbering, offset, episodes, seriesLabel: seasonLabel(episode), ...(mediaTitle ? { mediaTitle } : {}) });
   }
   return { result, candidates: summarize(collected, result.ok ? result.target.mediaId : null) };
 }

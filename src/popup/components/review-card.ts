@@ -2,8 +2,8 @@ import type { Result } from '../../shared/result';
 import type { CandidateSummary, PendingReview } from '../../shared/review.types';
 import { describeOutcome, type SyncFeedback } from '../../shared/sync-feedback';
 import type { SyncOutcome } from '../../shared/sync.types';
-import { h, nodes } from '../lib/dom';
-import { icon } from './icons';
+import { h, nodes } from '../../ui/dom';
+import { icon } from '../../ui/icons';
 
 export interface ReviewActions {
   search(query: string): Promise<Result<CandidateSummary[], string>>;

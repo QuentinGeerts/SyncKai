@@ -6,6 +6,7 @@ import {
   matchCrunchyrollLink,
   normalizeTitle,
   resolveTarget,
+  seasonLabel,
   toSortableDate,
   type EpisodeNumbers,
   type MediaCandidate,
@@ -205,5 +206,13 @@ describe('mappingFromManualChoice', () => {
     expect(mappingFromManualChoice(ep, 7, 0, 12)).toBeNull();
     expect(mappingFromManualChoice(ep, 7, 13, 12)).toBeNull();
     expect(mappingFromManualChoice(ep, 7, 2.5, 12)).toBeNull();
+  });
+});
+
+describe('seasonLabel', () => {
+  it('ajoute la saison et son titre quand il diffère de l’anime', () => {
+    expect(seasonLabel({ animeTitle: 'One Piece', seasonNumber: 24, seasonTitle: 'Elbaph' })).toBe('One Piece · S24 (Elbaph)');
+    expect(seasonLabel({ animeTitle: 'Frieren', seasonNumber: 1, seasonTitle: 'Frieren' })).toBe('Frieren · S1');
+    expect(seasonLabel({ animeTitle: 'Film', seasonNumber: null, seasonTitle: null })).toBe('Film');
   });
 });

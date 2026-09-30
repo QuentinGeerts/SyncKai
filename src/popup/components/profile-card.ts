@@ -1,6 +1,6 @@
 import type { AniListViewer } from '../../shared/anilist.types';
-import { h } from '../lib/dom';
-import { icon } from './icons';
+import { h } from '../../ui/dom';
+import { icon } from '../../ui/icons';
 
 const CARD_CLASS = 'flex items-center gap-3 rounded-xl bg-zinc-900 p-3 ring-1 ring-zinc-800';
 const AVATAR_CLASS = 'h-10 w-10 shrink-0 rounded-full';

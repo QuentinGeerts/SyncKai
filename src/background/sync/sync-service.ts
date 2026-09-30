@@ -17,7 +17,7 @@ import type { SyncOutcome } from '../../shared/sync.types';
 import { AniListApiError } from '../api/client';
 import { getMediaListInfo, saveProgress, type MediaListInfo } from '../api/list';
 import { searchAnime } from '../api/media';
-import { mappingFromManualChoice, mappingKey } from './matching';
+import { mappingFromManualChoice, mappingKey, seasonLabel } from './matching';
 import { findReviewCandidates, resolveEpisode, toCandidateSummary } from './resolver';
 import { decideListUpdate } from './rules';
 
@@ -126,7 +126,7 @@ export async function resolveReview({ key, mediaId, progress }: ResolveReviewPay
       return { status: 'error', message: `Épisode ${progress} invalide pour « ${info.title} » (${info.episodes ?? '?'} épisodes).` };
     }
 
-    await saveMediaMapping(key, mapping);
+    await saveMediaMapping(key, { ...mapping, seriesLabel: seasonLabel(review.episode), mediaTitle: info.title });
     console.info(LOG_PREFIX, `Correspondance manuelle enregistrée pour ${key} :`, mapping);
     return await writeProgress(key, review.episode, info, progress);
   } catch (error: unknown) {

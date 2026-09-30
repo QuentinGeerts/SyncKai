@@ -1,7 +1,7 @@
 import type { RecentSync } from '../../shared/review.types';
-import { h } from '../lib/dom';
+import { h } from '../../ui/dom';
 import { renderAlert } from './alert';
-import { icon } from './icons';
+import { icon } from '../../ui/icons';
 
 interface RecentSyncsProps {
   syncs: RecentSync[];

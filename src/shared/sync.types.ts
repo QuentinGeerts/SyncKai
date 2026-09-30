@@ -13,6 +13,9 @@ export interface MediaMapping {
   offset: number;
   /** Nombre d'épisodes de la fiche au moment de la résolution (null = inconnu / en cours) */
   episodes: number | null;
+  /** Affichage dans la page d'options (absents des correspondances enregistrées avant la 1.1) */
+  seriesLabel?: string;
+  mediaTitle?: string;
 }
 
 export function isMediaMapping(value: unknown): value is MediaMapping {
@@ -21,7 +24,9 @@ export function isMediaMapping(value: unknown): value is MediaMapping {
     typeof value.mediaId === 'number' &&
     (value.numbering === 'displayed' || value.numbering === 'season') &&
     typeof value.offset === 'number' &&
-    (value.episodes === null || typeof value.episodes === 'number')
+    (value.episodes === null || typeof value.episodes === 'number') &&
+    (value.seriesLabel === undefined || typeof value.seriesLabel === 'string') &&
+    (value.mediaTitle === undefined || typeof value.mediaTitle === 'string')
   );
 }
 

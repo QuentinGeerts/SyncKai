@@ -1,5 +1,5 @@
-import { h } from '../lib/dom';
-import { icon } from './icons';
+import { h } from '../../ui/dom';
+import { icon } from '../../ui/icons';
 
 interface LoginCardProps {
   pending: boolean;

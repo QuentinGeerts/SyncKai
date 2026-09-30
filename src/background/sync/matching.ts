@@ -72,6 +72,13 @@ export function matchCrunchyrollLink(url: string, seriesId: string | null, serie
   return seriesSlug && segments.length <= 2 && segments.at(-1) === seriesSlug ? 'slug' : null;
 }
 
+/** Libellé lisible d'une saison : "One Piece · S24 (Elbaph)" */
+export function seasonLabel(episode: Pick<EpisodeInfo, 'animeTitle' | 'seasonNumber' | 'seasonTitle'>): string {
+  const season = episode.seasonNumber !== null ? ` · S${episode.seasonNumber}` : '';
+  const hasDistinctTitle = episode.seasonTitle && normalizeTitle(episode.seasonTitle) !== normalizeTitle(episode.animeTitle);
+  return `${episode.animeTitle}${season}${hasDistinctTitle ? ` (${episode.seasonTitle})` : ''}`;
+}
+
 /** Clé de cache d'une saison : "crunchyroll:GRMG8ZQZR:s24" */
 export function mappingKey(episode: Pick<EpisodeInfo, 'platform' | 'seriesId' | 'animeTitle' | 'seasonNumber'>): string {
   const series = episode.seriesId ?? `title:${normalizeTitle(episode.animeTitle)}`;

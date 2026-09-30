@@ -1,5 +1,5 @@
 import type { PendingReview } from '../../shared/review.types';
-import { h } from '../lib/dom';
+import { h } from '../../ui/dom';
 import { createReviewCard, type ReviewActions, type ReviewCard } from './review-card';
 
 export interface ReviewSection {

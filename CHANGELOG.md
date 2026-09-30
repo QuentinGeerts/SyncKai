@@ -3,6 +3,17 @@
 Toutes les évolutions notables de SyncKai sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions selon [SemVer](https://semver.org/lang/fr/).
 
+## [Non publié]
+
+### Ajouté
+
+- **Icônes de l'extension** (16 à 128 px), générées par `npm run icons`.
+- **Page d'options** (lien « Options » dans le popup) :
+  - pause de la synchronisation automatique ;
+  - déclenchement au générique de fin ou à un pourcentage réglable (70–98 %) ;
+  - activation des toasts de confirmation (les alertes restent affichées) ;
+  - liste des correspondances mémorisées, avec « Oublier » par saison et réinitialisation complète.
+
 ## [1.0.0] - 2026-09-30
 
 Première version : synchronisation automatique Crunchyroll → AniList.

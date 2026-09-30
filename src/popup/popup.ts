@@ -19,7 +19,7 @@ import { renderProfileCard } from './components/profile-card';
 import { renderRecentSyncs } from './components/recent-syncs';
 import type { ReviewActions } from './components/review-card';
 import { createReviewSection } from './components/review-section';
-import { h, nodes, type Child } from './lib/dom';
+import { h, nodes, type Child } from '../ui/dom';
 import { createStore, type PopupState, type SyncData } from './state';
 
 const SW_UNREACHABLE = 'Impossible de contacter l’extension. Réessaie.';

@@ -38,7 +38,7 @@ export async function saveCachedViewer(viewer: AniListViewer): Promise<void> {
 }
 
 // Les correspondances ne dépendent pas de l'utilisateur (mediaId global) : conservées à la déconnexion
-async function getMediaMappings(): Promise<Record<string, MediaMapping>> {
+export async function getMediaMappings(): Promise<Record<string, MediaMapping>> {
   const stored = await chrome.storage.local.get(STORAGE_KEYS.mediaMappings);
   const raw: unknown = stored[STORAGE_KEYS.mediaMappings];
   if (!isRecord(raw)) return {};
@@ -57,6 +57,10 @@ export async function saveMediaMapping(key: string, mapping: MediaMapping): Prom
 export async function deleteMediaMapping(key: string): Promise<void> {
   const { [key]: _removed, ...rest } = await getMediaMappings();
   await chrome.storage.local.set({ [STORAGE_KEYS.mediaMappings]: rest });
+}
+
+export async function clearMediaMappings(): Promise<void> {
+  await chrome.storage.local.remove(STORAGE_KEYS.mediaMappings);
 }
 
 // ─── Vérifications manuelles & dernières synchros (propres à l'utilisateur) ───
