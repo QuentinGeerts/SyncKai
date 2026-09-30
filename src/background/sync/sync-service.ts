@@ -9,14 +9,15 @@ import {
   deletePendingReview,
   getPendingReviews,
   getRecentSyncs,
-  getValidToken,
   saveMediaMapping,
   savePendingReview,
 } from '../../shared/storage';
-import type { SyncOutcome } from '../../shared/sync.types';
-import { AniListApiError } from '../api/client';
-import { getMediaListInfo, saveProgress, type MediaListInfo } from '../api/list';
-import { searchAnime } from '../api/media';
+import type { ServiceResult, SyncOutcome } from '../../shared/sync.types';
+import { TRACKER_LABELS, type TrackerId } from '../../shared/tracker.types';
+import { ApiError } from '../api/errors';
+import { getAnimeById, searchAnime } from '../api/media';
+import { getConnectedTrackers } from '../trackers';
+import type { CatalogMedia, TrackerService } from '../trackers/tracker';
 import { mappingFromManualChoice, mappingKey, seasonLabel } from './matching';
 import { findReviewCandidates, resolveEpisode, toCandidateSummary } from './resolver';
 import { decideListUpdate } from './rules';
@@ -25,24 +26,22 @@ const LOG_PREFIX = '[SyncKai:sync]';
 const MAX_SEARCH_RESULTS = 10;
 
 const SKIP_REASONS = {
-  'already-completed': 'Déjà marqué comme terminé sur AniList',
+  'already-completed': 'Déjà marqué comme terminé',
   repeating: 'Revisionnage en cours : progression non modifiée',
 } as const;
 
 /** Convertit une erreur en résultat affichable (les handlers de messages ne lèvent jamais). */
 function toErrorOutcome(error: unknown): SyncOutcome {
-  if (error instanceof AniListApiError) {
+  if (error instanceof ApiError) {
     console.error(LOG_PREFIX, error.code, error.message);
-    return error.code === 'TOKEN_INVALID' || error.code === 'NOT_AUTHENTICATED'
-      ? { status: 'not-connected' }
-      : { status: 'error', message: error.message };
+    return { status: 'error', message: error.message };
   }
   console.error(LOG_PREFIX, 'Erreur inattendue :', error);
   return { status: 'error', message: 'Erreur inattendue pendant la synchronisation.' };
 }
 
 function toErrorResult(error: unknown): { ok: false; code: AniListErrorCode; message: string } {
-  if (error instanceof AniListApiError) return { ok: false, code: error.code, message: error.message };
+  if (error instanceof ApiError) return { ok: false, code: error.code, message: error.message };
   console.error(LOG_PREFIX, 'Erreur inattendue :', error);
   return { ok: false, code: 'API_ERROR', message: 'Erreur inattendue.' };
 }
@@ -52,46 +51,95 @@ async function queueReview(review: PendingReview): Promise<void> {
   await refreshReviewBadge();
 }
 
+/** Fiche du catalogue AniList (titre, nombre d'épisodes, identifiant MAL) : aucun compte requis. */
+async function getCatalogMedia(mediaId: number): Promise<CatalogMedia> {
+  const media = await getAnimeById(mediaId);
+  return { mediaId, idMal: media.idMal, title: media.displayTitle, episodes: media.episodes };
+}
+
+/** Applique les règles métier et écrit sur UN service. Ne lève jamais : l'échec est un résultat. */
+async function writeToService(
+  tracker: TrackerService,
+  catalog: CatalogMedia,
+  progress: number,
+  isCorrection: boolean,
+): Promise<ServiceResult> {
+  const label = TRACKER_LABELS[tracker.id];
+  const id = tracker.resolveId(catalog);
+  if (id === null) return { service: tracker.id, outcome: { status: 'skipped', reason: 'Pas de fiche équivalente' } };
+
+  try {
+    // Lecture fraîche juste avant l'écriture (la liste a pu changer depuis un autre appareil)
+    const current = await tracker.getEntry(id);
+    // Découpage différent entre services : on n'écrit pas au-delà de la fiche de ce service
+    if (current.episodes !== null && progress > current.episodes) {
+      return {
+        service: tracker.id,
+        outcome: { status: 'skipped', reason: `Épisode ${progress} au-delà des ${current.episodes} épisodes de la fiche` },
+      };
+    }
+
+    const decision = decideListUpdate(current.entry, progress, current.episodes ?? catalog.episodes, isCorrection);
+    if (decision.action === 'skip') {
+      console.info(LOG_PREFIX, `${label} : pas de mise à jour (${decision.reason})`, current);
+      return {
+        service: tracker.id,
+        outcome:
+          decision.reason === 'up-to-date'
+            ? { status: 'up-to-date', progress: current.entry?.progress ?? progress }
+            : { status: 'skipped', reason: SKIP_REASONS[decision.reason] },
+      };
+    }
+
+    const saved = await tracker.saveProgress(id, decision.progress, decision.status);
+    console.info(LOG_PREFIX, `✔ ${label} : ${current.title} → épisode ${saved.progress} (${saved.status})`);
+    return { service: tracker.id, outcome: { status: 'updated', progress: saved.progress, completed: saved.status === 'COMPLETED' } };
+  } catch (error: unknown) {
+    console.error(LOG_PREFIX, `${label} : échec`, error);
+    return { service: tracker.id, outcome: { status: 'error', message: error instanceof ApiError ? error.message : 'Erreur inattendue.' } };
+  }
+}
+
+interface WriteOptions {
+  isCorrection?: boolean;
+  /** Restreint l'écriture à ces services (nouvelle tentative après un échec partiel) */
+  only?: readonly TrackerId[] | null;
+}
+
 /**
- * Applique les règles métier puis écrit la progression. Commun à la synchro automatique,
- * au choix manuel et à la correction. Seules les écritures réelles sont ajoutées aux "dernières synchros"
- * (un épisode déjà vu ou un anime terminé n'a rien modifié : rien à corriger).
+ * Écrit la progression sur chaque service connecté. Commun à la synchro automatique, au choix
+ * manuel et à la correction. Seules les écritures réelles alimentent les "dernières synchros".
  */
-async function writeProgress(
+async function writeToServices(
   key: string,
   episode: EpisodeInfo,
-  info: MediaListInfo,
+  catalog: CatalogMedia,
   progress: number,
-  isCorrection = false,
+  options: WriteOptions = {},
 ): Promise<SyncOutcome> {
-  const decision = decideListUpdate(info.entry, progress, info.episodes, isCorrection);
+  const trackers = await getConnectedTrackers(options.only ?? null);
+  if (trackers.length === 0) return { status: 'not-connected' };
 
-  let outcome: SyncOutcome;
-  if (decision.action === 'skip') {
-    console.info(LOG_PREFIX, `Pas de mise à jour (${decision.reason})`, info);
-    outcome =
-      decision.reason === 'up-to-date'
-        ? { status: 'up-to-date', mediaTitle: info.title, progress: info.entry?.progress ?? progress }
-        : { status: 'skipped', mediaTitle: info.title, reason: SKIP_REASONS[decision.reason] };
-  } else {
-    const saved = await saveProgress(info.mediaId, decision.progress, decision.status);
-    console.info(LOG_PREFIX, `✔ ${info.title} → épisode ${saved.progress} (${saved.status})`);
-    outcome = { status: 'updated', mediaTitle: info.title, progress: saved.progress, completed: saved.status === 'COMPLETED' };
-    await addRecentSync({ key, episode, mediaId: info.mediaId, mediaTitle: info.title, progress: saved.progress, syncedAt: Date.now() });
+  const results = await Promise.all(trackers.map((t) => writeToService(t, catalog, progress, options.isCorrection ?? false)));
+
+  if (results.some((r) => r.outcome.status === 'updated')) {
+    await addRecentSync({ key, episode, mediaId: catalog.mediaId, mediaTitle: catalog.title, progress, syncedAt: Date.now() });
   }
-
-  // Une synchro aboutie pour cette saison rend caduque une éventuelle vérification en attente
-  if ((await getPendingReviews()).some((r) => r.key === key)) {
+  // Correspondance appliquée pour cette saison : une éventuelle vérification en attente est caduque
+  if (results.some((r) => r.outcome.status !== 'error') && (await getPendingReviews()).some((r) => r.key === key)) {
     await deletePendingReview(key);
     await refreshReviewBadge();
   }
-  return outcome;
+  return { status: 'synced', mediaTitle: catalog.title, results };
 }
 
-/** Synchronise un épisode terminé avec la liste AniList de l'utilisateur. Ne lève jamais. */
-export async function syncEpisode(episode: EpisodeInfo): Promise<SyncOutcome> {
+/**
+ * Synchronise un épisode terminé avec les services connectés (tous, ou `only` après un échec partiel).
+ * La correspondance passe toujours par le catalogue AniList, même sans compte AniList. Ne lève jamais.
+ */
+export async function syncEpisode(episode: EpisodeInfo, only: readonly TrackerId[] | null = null): Promise<SyncOutcome> {
   try {
-    if (!(await getValidToken())) return { status: 'not-connected' };
+    if ((await getConnectedTrackers(only)).length === 0) return { status: 'not-connected' };
     const key = mappingKey(episode);
     const { result, candidates } = await resolveEpisode(episode);
 
@@ -112,8 +160,7 @@ export async function syncEpisode(episode: EpisodeInfo): Promise<SyncOutcome> {
 
     const { target } = result;
     console.info(LOG_PREFIX, `Fiche ${target.mediaId}, progression ${target.progress} : ${target.reason}`);
-    // Lecture fraîche juste avant l'écriture (la liste a pu changer depuis un autre appareil)
-    return await writeProgress(key, episode, await getMediaListInfo(target.mediaId), target.progress);
+    return await writeToServices(key, episode, await getCatalogMedia(target.mediaId), target.progress, { only });
   } catch (error: unknown) {
     return toErrorOutcome(error);
   }
@@ -125,17 +172,17 @@ export async function resolveReview({ key, mediaId, progress }: ResolveReviewPay
     const review = (await getPendingReviews()).find((r) => r.key === key);
     if (!review) return { status: 'error', message: 'Cette vérification n’existe plus.' };
 
-    const info = await getMediaListInfo(mediaId);
-    const mapping = mappingFromManualChoice(review.episode, mediaId, progress, info.episodes);
+    const catalog = await getCatalogMedia(mediaId);
+    const mapping = mappingFromManualChoice(review.episode, mediaId, progress, catalog.episodes);
     if (!mapping) {
-      return { status: 'error', message: `Épisode ${progress} invalide pour « ${info.title} » (${info.episodes ?? '?'} épisodes).` };
+      return { status: 'error', message: `Épisode ${progress} invalide pour « ${catalog.title} » (${catalog.episodes ?? '?'} épisodes).` };
     }
 
-    await saveMediaMapping(key, { ...mapping, seriesLabel: seasonLabel(review.episode), mediaTitle: info.title });
+    await saveMediaMapping(key, { ...mapping, seriesLabel: seasonLabel(review.episode), mediaTitle: catalog.title });
     console.info(LOG_PREFIX, `Correspondance manuelle enregistrée pour ${key} :`, mapping);
     // Correction sur la fiche déjà utilisée : la valeur choisie remplace celle écrite (même plus basse)
     const isCorrection = review.previous?.mediaId === mediaId;
-    return await writeProgress(key, review.episode, info, progress, isCorrection);
+    return await writeToServices(key, review.episode, catalog, progress, { isCorrection });
   } catch (error: unknown) {
     return toErrorOutcome(error);
   }

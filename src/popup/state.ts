@@ -1,12 +1,16 @@
+import type { MalViewer } from '../shared/mal.types';
 import type { AniListViewer } from '../shared/anilist.types';
 import type { PendingReview, RecentSync } from '../shared/review.types';
 
-/** État d'authentification du popup : chaque vue est une fonction pure de cet état. */
-export type PopupState =
+/** État de connexion d'un compte (AniList, MyAnimeList) : chaque vue est une fonction pure de cet état. */
+export type AccountState<Viewer> =
   | { status: 'loading' }
   | { status: 'logged-out'; pending: boolean; error: string | null }
   /** viewer à null = profil pas encore chargé (affichage skeleton) */
-  | { status: 'logged-in'; viewer: AniListViewer | null; error: string | null };
+  | { status: 'logged-in'; viewer: Viewer | null; error: string | null };
+
+export type PopupState = AccountState<AniListViewer>;
+export type MalState = AccountState<MalViewer>;
 
 /** Données de synchronisation lues depuis le stockage (vérifications, dernières synchros). */
 export interface SyncData {

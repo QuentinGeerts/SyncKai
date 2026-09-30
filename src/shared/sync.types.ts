@@ -1,3 +1,4 @@
+import type { TrackerId } from './tracker.types';
 import { isRecord } from './guards';
 
 /** Numéro d'épisode utilisé pour calculer la progression AniList */
@@ -30,11 +31,27 @@ export function isMediaMapping(value: unknown): value is MediaMapping {
   );
 }
 
-/** Résultat d'une synchronisation, renvoyé au content script pour affichage (toast). */
+/** Résultat de l'écriture sur UN service de suivi */
+export type ServiceOutcome =
+  | { status: 'updated'; progress: number; completed: boolean }
+  | { status: 'up-to-date'; progress: number }
+  | { status: 'skipped'; reason: string }
+  | { status: 'error'; message: string };
+
+export interface ServiceResult {
+  service: TrackerId;
+  outcome: ServiceOutcome;
+}
+
+/** Résultat d'une synchronisation, renvoyé au content script (toast) et au popup. */
 export type SyncOutcome =
-  | { status: 'updated'; mediaTitle: string; progress: number; completed: boolean }
-  | { status: 'up-to-date'; mediaTitle: string; progress: number }
-  | { status: 'skipped'; mediaTitle: string; reason: string }
+  /** Fiche identifiée : un résultat par service connecté (succès partiel possible) */
+  | { status: 'synced'; mediaTitle: string; results: ServiceResult[] }
   | { status: 'needs-review'; reason: string }
   | { status: 'not-connected' }
   | { status: 'error'; message: string };
+
+/** Services à relancer après un échec partiel ("Réessayer" ne réécrit pas les services déjà à jour) */
+export function failedServices(outcome: SyncOutcome): TrackerId[] {
+  return outcome.status === 'synced' ? outcome.results.filter((r) => r.outcome.status === 'error').map((r) => r.service) : [];
+}

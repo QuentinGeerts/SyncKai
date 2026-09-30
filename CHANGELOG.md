@@ -3,6 +3,19 @@
 Toutes les évolutions notables de SyncKai sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions selon [SemVer](https://semver.org/lang/fr/).
 
+## [Non publié]
+
+### Ajouté
+
+- **MyAnimeList** : connexion (OAuth2 + PKCE, sans secret, renouvellement automatique du token), carte de compte dans le popup, synchronisation de la progression en parallèle d'AniList.
+- Chaque compte est facultatif : MyAnimeList fonctionne sans compte AniList (catalogue AniList public pour la correspondance, puis `idMal`).
+- Résultat par service dans le toast, et « Réessayer » limité aux services en échec.
+
+### Modifié
+
+- Déconnexion par service depuis sa carte ; les vérifications et l'historique ne sont effacés qu'à la déconnexion du dernier compte.
+- Services de suivi derrière une interface commune (pattern Adapter, `src/background/trackers/`).
+
 ## [1.2.0] - 2026-09-30
 
 ### Ajouté

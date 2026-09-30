@@ -1,7 +1,8 @@
 import { isViewerQueryData, type AniListViewer, type ViewerResult } from '../../shared/anilist.types';
 import { saveCachedViewer } from '../../shared/storage';
 import { toSafeUrl } from '../../shared/url';
-import { AniListApiError, anilistQuery } from './client';
+import { anilistQuery } from './client';
+import { ApiError } from './errors';
 
 const VIEWER_QUERY = /* GraphQL */ `
   query Viewer {
@@ -27,7 +28,7 @@ export async function getViewer(): Promise<ViewerResult> {
     await saveCachedViewer(viewer);
     return { ok: true, data: viewer };
   } catch (error: unknown) {
-    if (error instanceof AniListApiError) {
+    if (error instanceof ApiError) {
       return { ok: false, code: error.code, message: error.message };
     }
     console.error('[SyncKai] Erreur inattendue (getViewer) :', error);

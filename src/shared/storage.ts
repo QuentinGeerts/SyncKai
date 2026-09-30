@@ -1,6 +1,7 @@
 import { isAniListViewer, type AniListViewer } from './anilist.types';
 import { isAniListToken, type AniListToken } from './auth.types';
 import { isRecord } from './guards';
+import { isMalToken, isMalViewer, type MalToken, type MalViewer } from './mal.types';
 import { isPendingReview, isRecentSync, type PendingReview, type RecentSync } from './review.types';
 import { isMediaMapping, type MediaMapping } from './sync.types';
 
@@ -24,6 +25,8 @@ export const STORAGE_KEYS = {
   mediaMappings: 'mediaMappings',
   pendingReviews: 'pendingReviews',
   recentSyncs: 'recentSyncs',
+  malToken: 'malToken',
+  malViewer: 'malViewer',
 } as const;
 
 /** Retourne le token AniList s'il existe et n'a pas expiré. */
@@ -118,12 +121,40 @@ export function addRecentSync(sync: RecentSync): Promise<void> {
 
 /** Supprime les données de session AniList : token, profil, vérifications et synchros de l'utilisateur. */
 export function clearAniListSession(): Promise<void> {
-  return withStorageLock(() =>
-    chrome.storage.local.remove([
-    STORAGE_KEYS.anilistToken,
-    STORAGE_KEYS.anilistViewer,
-    STORAGE_KEYS.pendingReviews,
-      STORAGE_KEYS.recentSyncs,
-    ]),
-  );
+  return withStorageLock(() => chrome.storage.local.remove([STORAGE_KEYS.anilistToken, STORAGE_KEYS.anilistViewer]));
+}
+
+/**
+ * Vérifications et dernières synchros : propres à l'utilisateur, effacées quand plus aucun
+ * service de suivi n'est connecté (déconnexion du dernier compte).
+ */
+export function clearUserSyncData(): Promise<void> {
+  return withStorageLock(() => chrome.storage.local.remove([STORAGE_KEYS.pendingReviews, STORAGE_KEYS.recentSyncs]));
+}
+
+// ─── Session MyAnimeList ──────────────────────────────────────────────────
+
+/** Token MAL stocké, même expiré : le refresh token permet de le renouveler. */
+export async function getMalToken(): Promise<MalToken | null> {
+  const stored = await chrome.storage.local.get(STORAGE_KEYS.malToken);
+  const token: unknown = stored[STORAGE_KEYS.malToken];
+  return isMalToken(token) ? token : null;
+}
+
+export async function saveMalToken(token: MalToken): Promise<void> {
+  await chrome.storage.local.set({ [STORAGE_KEYS.malToken]: token });
+}
+
+export async function getCachedMalViewer(): Promise<MalViewer | null> {
+  const stored = await chrome.storage.local.get(STORAGE_KEYS.malViewer);
+  const viewer: unknown = stored[STORAGE_KEYS.malViewer];
+  return isMalViewer(viewer) ? viewer : null;
+}
+
+export async function saveCachedMalViewer(viewer: MalViewer): Promise<void> {
+  await chrome.storage.local.set({ [STORAGE_KEYS.malViewer]: viewer });
+}
+
+export function clearMalSession(): Promise<void> {
+  return withStorageLock(() => chrome.storage.local.remove([STORAGE_KEYS.malToken, STORAGE_KEYS.malViewer]));
 }

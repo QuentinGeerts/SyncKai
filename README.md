@@ -1,17 +1,17 @@
 # SyncKai
 
-Extension de navigateur (Manifest V3) qui détecte les épisodes regardés sur Crunchyroll et ADN, et met à jour automatiquement ta liste **AniList**, sans action manuelle.
+Extension de navigateur (Manifest V3) qui détecte les épisodes regardés sur Crunchyroll et ADN, et met à jour automatiquement tes listes **AniList** et/ou **MyAnimeList**, sans action manuelle.
 
 ## Fonctionnalités
 
-- Connexion à AniList en un clic depuis le popup.
+- Connexion à AniList et/ou MyAnimeList en un clic depuis le popup (chaque compte est facultatif).
 - Détection de l'épisode en cours sur Crunchyroll et ADN (Animation Digital Network), y compris lors du passage à l'épisode suivant.
 - Synchronisation au début du générique de fin quand la plateforme le fournit (Crunchyroll), sinon à un pourcentage réglable (85 % par défaut).
 - Toast de confirmation directement sur la page, même en plein écran.
 - Choix manuel de la fiche AniList quand la correspondance est incertaine, et correction des dernières synchros.
 - Page d'options : pause, mode de déclenchement (générique ou pourcentage), toasts, gestion des correspondances mémorisées.
 
-Plateformes prises en charge : Crunchyroll, ADN. Service de suivi : AniList.
+Plateformes prises en charge : Crunchyroll, ADN. Services de suivi : AniList, MyAnimeList.
 
 ## Installation (développement)
 
@@ -32,6 +32,12 @@ L'extension utilise un client OAuth AniList (Implicit Grant). Sa **Redirect URL*
 https://pchgepnbifepbhcjhkaflnjnejodlneh.chromiumapp.org/
 ```
 
+### Configuration MyAnimeList
+
+Client MAL de type **other** (client public : Authorization Code + PKCE, aucun secret embarqué), avec la même **App Redirect URL** que ci-dessus.
+
+La correspondance des fiches passe toujours par le catalogue AniList (API publique, sans compte), puis par l'identifiant MAL de la fiche (`idMal`).
+
 Cet identifiant d'extension est fixé par la clé publique `key` du `manifest.json` : il est identique sur toutes les machines.
 
 ## Scripts
@@ -47,7 +53,8 @@ Cet identifiant d'extension est fixé par la clé publique `key` du `manifest.js
 
 ```
 src/
-  background/   Service worker : OAuth, API AniList, résolution des correspondances, synchronisation
+  background/   Service worker : OAuth (AniList, MAL), API, résolution des correspondances, synchronisation
+                (trackers/ : un adapter par service de suivi)
   content/      Content script : adapters par plateforme, suivi de la vidéo, toast
   popup/        Popup (TypeScript + Tailwind CSS) : connexion, profil, vérifications, dernières synchros
   options/      Page d'options (réglages, correspondances mémorisées)

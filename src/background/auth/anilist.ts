@@ -1,5 +1,5 @@
-import type { AniListToken, AuthResult } from '../shared/auth.types';
-import { saveToken } from '../shared/storage';
+import type { AniListToken, AuthResult } from '../../shared/auth.types';
+import { saveToken } from '../../shared/storage';
 
 const ANILIST_CLIENT_ID = '52346';
 const ANILIST_AUTHORIZE_URL = 'https://anilist.co/api/v2/oauth/authorize';

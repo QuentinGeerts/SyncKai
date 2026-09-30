@@ -1,5 +1,7 @@
+import { getMalViewer } from './api/mal';
 import { getViewer } from './api/viewer';
-import { loginWithAniList } from './auth';
+import { loginWithAniList } from './auth/anilist';
+import { loginWithMal } from './auth/mal';
 import { reopenReview, resolveReview, searchCandidates, syncEpisode } from './sync/sync-service';
 import { refreshReviewBadge } from '../shared/badge';
 import {
@@ -26,6 +28,8 @@ chrome.runtime.onStartup.addListener((): void => {
 const UNEXPECTED_ERRORS: { [K in MessageType]: MessageResponse<K> } = {
   LOGIN_ANILIST: { ok: false, code: 'UNKNOWN', message: 'Erreur inattendue.' },
   GET_VIEWER: { ok: false, code: 'API_ERROR', message: 'Erreur inattendue.' },
+  LOGIN_MAL: { ok: false, code: 'UNKNOWN', message: 'Erreur inattendue.' },
+  GET_MAL_VIEWER: { ok: false, code: 'API_ERROR', message: 'Erreur inattendue.' },
   EPISODE_COMPLETED: { status: 'error', message: 'Erreur inattendue pendant la synchronisation.' },
   SEARCH_ANIME: { ok: false, code: 'API_ERROR', message: 'Erreur inattendue.' },
   RESOLVE_REVIEW: { status: 'error', message: 'Erreur inattendue pendant la synchronisation.' },
@@ -44,7 +48,13 @@ const handlers: MessageHandlers = {
     return result;
   },
   GET_VIEWER: () => getViewer(),
-  EPISODE_COMPLETED: (episode) => syncEpisode(episode),
+  LOGIN_MAL: async () => {
+    const result = await loginWithMal();
+    if (result.ok) await getMalViewer();
+    return result;
+  },
+  GET_MAL_VIEWER: () => getMalViewer(),
+  EPISODE_COMPLETED: ({ episode, services }) => syncEpisode(episode, services),
   SEARCH_ANIME: ({ query }) => searchCandidates(query),
   RESOLVE_REVIEW: (payload) => resolveReview(payload),
   REOPEN_REVIEW: ({ key }) => reopenReview(key),

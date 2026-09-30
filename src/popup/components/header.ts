@@ -7,7 +7,7 @@ const STATUS_BADGE: Record<PopupState['status'], { label: string; dot: string }>
   'logged-in': { label: 'Connecté', dot: 'bg-emerald-500' },
 };
 
-export function renderHeader(state: PopupState): HTMLElement {
+export function renderHeader(state: Pick<PopupState, 'status'>): HTMLElement {
   const badge = STATUS_BADGE[state.status];
 
   return h(

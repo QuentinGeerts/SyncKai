@@ -1,5 +1,7 @@
 import type { EpisodeInfo } from '../../shared/episode.types';
 import { sendMessage } from '../../shared/messages';
+import { failedServices } from '../../shared/sync.types';
+import type { TrackerId } from '../../shared/tracker.types';
 import { DEFAULT_SETTINGS, getSettings, type SyncSettings } from '../../shared/settings';
 import type { StreamingAdapter } from '../adapters/adapter';
 import { ALERT_TOAST_MS, toastForOutcome } from '../ui/sync-toast';
@@ -108,9 +110,9 @@ export function startWatchSession(adapter: StreamingAdapter, episodeId: string):
    * Toasts désactivés : seules les alertes (à vérifier, erreurs) restent affichées.
    * Une erreur (réseau, AniList indisponible…) propose "Réessayer" : l'épisode n'est pas perdu.
    */
-  async function syncWithFeedback(episode: EpisodeInfo, showProgress: boolean): Promise<void> {
+  async function syncWithFeedback(episode: EpisodeInfo, showProgress: boolean, services: TrackerId[] | null = null): Promise<void> {
     const toast = showProgress
-      ? showToast({ tone: 'info', title: 'Synchronisation avec AniList…', message: formatEpisodeShort(episode) })
+      ? showToast({ tone: 'info', title: 'Synchronisation…', message: formatEpisodeShort(episode) })
       : null;
     const notify = (content: ToastContent, autoHideMs: number): void => {
       if (toast) toast.update(content, autoHideMs);
@@ -118,12 +120,15 @@ export function startWatchSession(adapter: StreamingAdapter, episodeId: string):
     };
 
     try {
-      const outcome = await sendMessage('EPISODE_COMPLETED', episode);
+      const outcome = await sendMessage('EPISODE_COMPLETED', { episode, services });
       log.info('Résultat de la synchronisation :', outcome);
       const { content, autoHideMs } = toastForOutcome(outcome);
-      if (outcome.status === 'error') {
+      // Échec global → tout relancer ; échec partiel → seulement les services en erreur
+      const retry = outcome.status === 'error' ? null : failedServices(outcome);
+      if (retry === null || retry.length > 0) {
         // Nouvelle tentative explicite : le toast de progression est forcé pour voir le résultat
-        notify({ ...content, action: { label: 'Réessayer', onClick: () => void syncWithFeedback(episode, true) } }, RETRY_TOAST_MS);
+        const action = { label: 'Réessayer', onClick: () => void syncWithFeedback(episode, true, retry) };
+        notify({ ...content, action }, RETRY_TOAST_MS);
       } else {
         notify(content, autoHideMs);
       }

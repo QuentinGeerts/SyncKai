@@ -272,8 +272,8 @@ export function createReviewCard(initial: PendingReview, actions: ReviewActions,
 
     const outcome = await actions.confirm(review.key, chosen.id, progress);
     feedback = describeOutcome(outcome);
-    const isApplied = outcome.status === 'updated' || outcome.status === 'up-to-date' || outcome.status === 'skipped';
-    if (!isApplied) {
+    // Fiche appliquée (même en succès partiel : la correspondance est mémorisée, "Réessayer" reste possible depuis la page)
+    if (outcome.status !== 'synced') {
       phase = 'editing';
       render();
       return;
@@ -283,7 +283,7 @@ export function createReviewCard(initial: PendingReview, actions: ReviewActions,
     // Correction vers une autre fiche : la progression écrite sur l'ancienne n'est pas annulée
     const previous = review.previous;
     note = previous && previous.mediaId !== chosen.id
-      ? `Pense à corriger « ${previous.title} » sur AniList (épisode ${previous.progress} y a été enregistré).`
+      ? `Pense à corriger « ${previous.title} » sur tes listes (épisode ${previous.progress} y a été enregistré).`
       : null;
     render();
     // Avec une note à lire, la carte reste affichée jusqu'au clic sur "Fermer"

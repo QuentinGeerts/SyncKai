@@ -1,6 +1,7 @@
 import { isRecord } from '../../shared/guards';
 import type { ListEntryState, ListStatus } from '../sync/rules';
-import { AniListApiError, anilistQuery } from './client';
+import { anilistQuery } from './client';
+import { ApiError } from './errors';
 
 export interface MediaListInfo {
   mediaId: number;
@@ -75,6 +76,6 @@ export async function getMediaListInfo(mediaId: number): Promise<MediaListInfo> 
 export async function saveProgress(mediaId: number, progress: number, status: ListStatus): Promise<ListEntryState> {
   const data = await anilistQuery(SAVE_PROGRESS_MUTATION, isSaveProgressData, { mediaId, progress, status });
   const entry = parseEntry(data.SaveMediaListEntry);
-  if (!entry) throw new AniListApiError('INVALID_RESPONSE', 'Réponse d’AniList inattendue après la mise à jour.');
+  if (!entry) throw new ApiError('INVALID_RESPONSE', 'Réponse d’AniList inattendue après la mise à jour.');
   return entry;
 }

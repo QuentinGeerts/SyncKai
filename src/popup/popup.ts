@@ -1,26 +1,32 @@
 import { isAniListViewer, type ViewerErrorCode, type ViewerResult } from '../shared/anilist.types';
 import type { AuthResult } from '../shared/auth.types';
 import { refreshReviewBadge } from '../shared/badge';
+import { isMalViewer, type MalViewerResult } from '../shared/mal.types';
 import { sendMessage } from '../shared/messages';
 import {
   clearAniListSession,
+  clearMalSession,
+  clearUserSyncData,
   deletePendingReview,
+  getCachedMalViewer,
   getCachedViewer,
+  getMalToken,
   getPendingReviews,
   getRecentSyncs,
   getValidToken,
   STORAGE_KEYS,
 } from '../shared/storage';
+import { h, nodes, type Child } from '../ui/dom';
 import { renderAlert } from './components/alert';
 import { renderFooter } from './components/footer';
 import { renderHeader } from './components/header';
 import { renderLoginCard } from './components/login-card';
+import { renderMalCard } from './components/mal-card';
 import { renderProfileCard } from './components/profile-card';
 import { renderRecentSyncs } from './components/recent-syncs';
 import type { ReviewActions } from './components/review-card';
 import { createReviewSection } from './components/review-section';
-import { h, nodes, type Child } from '../ui/dom';
-import { createStore, type PopupState, type SyncData } from './state';
+import { createStore, type MalState, type PopupState, type SyncData } from './state';
 
 const SW_UNREACHABLE = 'Impossible de contacter l’extension. Réessaie.';
 /** Erreurs qui invalident la session : retour à l'écran de connexion */
@@ -33,6 +39,7 @@ function getRoot(): HTMLDivElement {
 }
 
 const store = createStore<PopupState>({ status: 'loading' });
+const malStore = createStore<MalState>({ status: 'loading' });
 const syncStore = createStore<SyncData>({ reviews: [], recentSyncs: [], busyKey: null, recentError: null });
 const version = chrome.runtime.getManifest().version;
 
@@ -67,18 +74,18 @@ const reviewActions: ReviewActions = {
 // est réconciliée (jamais recréée) pour préserver les saisies en cours.
 
 const headerSlot = h('div', { class: 'contents' });
-const authSlot = h('div', { class: 'flex flex-col gap-3' });
+const accountsSlot = h('div', { class: 'flex flex-col gap-3' });
 const reviewSection = createReviewSection(reviewActions);
 const recentSlot = h('div', { class: 'contents' });
 const footerSlot = h('div', { class: 'contents' });
 
 getRoot().replaceChildren(
   headerSlot,
-  h('main', { class: 'flex min-h-[88px] flex-col gap-4 px-4 py-4' }, authSlot, reviewSection.element, recentSlot),
+  h('main', { class: 'flex min-h-[88px] flex-col gap-4 px-4 py-4' }, accountsSlot, reviewSection.element, recentSlot),
   footerSlot,
 );
 
-function renderAuth(state: PopupState): Child[] {
+function renderAniList(state: PopupState): Child[] {
   switch (state.status) {
     case 'loading':
       return [];
@@ -89,23 +96,39 @@ function renderAuth(state: PopupState): Child[] {
       ];
     case 'logged-in':
       return [
-        renderProfileCard(state.viewer),
+        renderProfileCard(state.viewer, () => void handleLogout()),
         state.error && renderAlert({ message: state.error, action: { label: 'Réessayer', onClick: () => void refreshViewer() } }),
       ];
   }
 }
 
-function render(): void {
-  const state = store.get();
-  const data = syncStore.get();
-  const isLoggedIn = state.status === 'logged-in';
+/** Statut global du header : connecté dès qu'un service l'est */
+function overallStatus(): PopupState['status'] {
+  const statuses = [store.get().status, malStore.get().status];
+  if (statuses.includes('logged-in')) return 'logged-in';
+  return statuses.includes('loading') ? 'loading' : 'logged-out';
+}
 
-  headerSlot.replaceChildren(renderHeader(state));
-  authSlot.replaceChildren(...nodes(renderAuth(state)));
-  reviewSection.update(isLoggedIn ? data.reviews : []);
+function render(): void {
+  const data = syncStore.get();
+  const isAnyConnected = overallStatus() === 'logged-in';
+
+  headerSlot.replaceChildren(renderHeader({ status: overallStatus() }));
+  accountsSlot.replaceChildren(
+    ...nodes([
+      ...renderAniList(store.get()),
+      renderMalCard({
+        state: malStore.get(),
+        onLogin: () => void handleMalLogin(),
+        onLogout: () => void handleMalLogout(),
+        onRetry: () => void refreshMalViewer(),
+      }),
+    ]),
+  );
+  reviewSection.update(isAnyConnected ? data.reviews : []);
   recentSlot.replaceChildren(
     ...nodes([
-      isLoggedIn &&
+      isAnyConnected &&
         renderRecentSyncs({
           syncs: data.recentSyncs,
           pendingKeys: new Set(data.reviews.map((r) => r.key)),
@@ -115,10 +138,19 @@ function render(): void {
         }),
     ]),
   );
-  footerSlot.replaceChildren(renderFooter({ version, onLogout: isLoggedIn ? () => void handleLogout() : undefined }));
+  footerSlot.replaceChildren(renderFooter({ version }));
 }
 
-// ─── Actions ──────────────────────────────────────────────────────────────
+// ─── Déconnexion commune ──────────────────────────────────────────────────
+
+/** Après une déconnexion : plus aucun service connecté → effacement des données de l'utilisateur */
+async function clearUserDataIfLastService(): Promise<void> {
+  const [anilistToken, malToken] = await Promise.all([getValidToken(), getMalToken()]);
+  if (!anilistToken && !malToken) await clearUserSyncData();
+  await refreshReviewBadge();
+}
+
+// ─── AniList ──────────────────────────────────────────────────────────────
 
 /** Rafraîchit le profil depuis l'API (stale-while-revalidate : le cache reste affiché). */
 async function refreshViewer(): Promise<void> {
@@ -152,7 +184,7 @@ async function handleLogin(): Promise<void> {
   }
 
   if (!result.ok) {
-    console.warn('[SyncKai] Échec de connexion :', result.code, result.message);
+    console.warn('[SyncKai] Échec de connexion AniList :', result.code, result.message);
     store.set({ status: 'logged-out', pending: false, error: result.message });
     return;
   }
@@ -166,14 +198,100 @@ async function handleLogin(): Promise<void> {
 async function handleLogout(): Promise<void> {
   try {
     await clearAniListSession();
-    await refreshReviewBadge();
+    await clearUserDataIfLastService();
     store.set({ status: 'logged-out', pending: false, error: null });
   } catch (error: unknown) {
-    console.error('[SyncKai] Échec de la déconnexion :', error);
+    console.error('[SyncKai] Échec de la déconnexion AniList :', error);
     const current = store.get();
     if (current.status === 'logged-in') store.set({ ...current, error: 'Impossible de se déconnecter. Réessaie.' });
   }
 }
+
+async function bootstrapAniList(): Promise<void> {
+  try {
+    if (!(await getValidToken())) {
+      store.set({ status: 'logged-out', pending: false, error: null });
+      return;
+    }
+    store.set({ status: 'logged-in', viewer: await getCachedViewer(), error: null });
+    await refreshViewer();
+  } catch (error: unknown) {
+    console.error('[SyncKai] Lecture du stockage impossible :', error);
+    store.set({ status: 'logged-out', pending: false, error: 'Impossible de lire la session.' });
+  }
+}
+
+// ─── MyAnimeList ──────────────────────────────────────────────────────────
+
+async function refreshMalViewer(): Promise<void> {
+  let result: MalViewerResult;
+  try {
+    result = await sendMessage('GET_MAL_VIEWER', null);
+  } catch (error: unknown) {
+    console.error('[SyncKai] Service worker injoignable :', error);
+    result = { ok: false, code: 'NETWORK', message: SW_UNREACHABLE };
+  }
+
+  if (!result.ok && AUTH_ERRORS.has(result.code)) {
+    malStore.set({ status: 'logged-out', pending: false, error: result.message });
+    return;
+  }
+
+  const current = malStore.get();
+  if (current.status !== 'logged-in') return;
+  malStore.set(result.ok ? { ...current, viewer: result.data, error: null } : { ...current, error: result.message });
+}
+
+async function handleMalLogin(): Promise<void> {
+  malStore.set({ status: 'logged-out', pending: true, error: null });
+
+  let result: AuthResult;
+  try {
+    result = await sendMessage('LOGIN_MAL', null);
+  } catch (error: unknown) {
+    console.error('[SyncKai] Service worker injoignable :', error);
+    result = { ok: false, code: 'UNKNOWN', message: SW_UNREACHABLE };
+  }
+
+  if (!result.ok) {
+    console.warn('[SyncKai] Échec de connexion MyAnimeList :', result.code, result.message);
+    malStore.set({ status: 'logged-out', pending: false, error: result.message });
+    return;
+  }
+
+  const viewer = await getCachedMalViewer();
+  malStore.set({ status: 'logged-in', viewer, error: null });
+  if (!viewer) await refreshMalViewer();
+}
+
+async function handleMalLogout(): Promise<void> {
+  try {
+    await clearMalSession();
+    await clearUserDataIfLastService();
+    malStore.set({ status: 'logged-out', pending: false, error: null });
+  } catch (error: unknown) {
+    console.error('[SyncKai] Échec de la déconnexion MyAnimeList :', error);
+    const current = malStore.get();
+    if (current.status === 'logged-in') malStore.set({ ...current, error: 'Impossible de se déconnecter. Réessaie.' });
+  }
+}
+
+async function bootstrapMal(): Promise<void> {
+  try {
+    // Token présent, même expiré : le service worker le renouvellera
+    if (!(await getMalToken())) {
+      malStore.set({ status: 'logged-out', pending: false, error: null });
+      return;
+    }
+    malStore.set({ status: 'logged-in', viewer: await getCachedMalViewer(), error: null });
+    await refreshMalViewer();
+  } catch (error: unknown) {
+    console.error('[SyncKai] Lecture du stockage impossible :', error);
+    malStore.set({ status: 'logged-out', pending: false, error: 'Impossible de lire la session.' });
+  }
+}
+
+// ─── Données de synchro ───────────────────────────────────────────────────
 
 /** "Corriger" : le service worker recharge les fiches candidates et rouvre une carte. */
 async function handleCorrect(key: string): Promise<void> {
@@ -194,23 +312,8 @@ async function loadSyncData(): Promise<void> {
   syncStore.set({ ...syncStore.get(), reviews, recentSyncs });
 }
 
-async function bootstrap(): Promise<void> {
-  try {
-    void loadSyncData();
-    if (!(await getValidToken())) {
-      store.set({ status: 'logged-out', pending: false, error: null });
-      return;
-    }
-    store.set({ status: 'logged-in', viewer: await getCachedViewer(), error: null });
-    await refreshViewer();
-  } catch (error: unknown) {
-    console.error('[SyncKai] Lecture du stockage impossible :', error);
-    store.set({ status: 'logged-out', pending: false, error: 'Impossible de lire la session.' });
-  }
-}
-
 // ─── Synchronisation avec le stockage ──────────────────────────────────────
-// La popup se ferme souvent pendant l'OAuth, et le service worker peut invalider la session
+// La popup se ferme souvent pendant l'OAuth, et le service worker peut invalider une session
 // ou ajouter des vérifications : on suit donc les changements du stockage.
 
 chrome.storage.onChanged.addListener((changes, areaName): void => {
@@ -223,7 +326,7 @@ chrome.storage.onChanged.addListener((changes, areaName): void => {
     if (!hasToken && state.status === 'logged-in') {
       store.set({ status: 'logged-out', pending: false, error: null });
     } else if (hasToken && state.status === 'logged-out' && !state.pending) {
-      void bootstrap();
+      void bootstrapAniList();
     }
   }
 
@@ -233,9 +336,29 @@ chrome.storage.onChanged.addListener((changes, areaName): void => {
     store.set({ ...state, viewer: viewerChange.newValue });
   }
 
+  const malTokenChange = changes[STORAGE_KEYS.malToken];
+  if (malTokenChange) {
+    const mal = malStore.get();
+    const hasToken = malTokenChange.newValue !== undefined;
+    if (!hasToken && mal.status === 'logged-in') {
+      malStore.set({ status: 'logged-out', pending: false, error: null });
+    } else if (hasToken && mal.status === 'logged-out' && !mal.pending) {
+      void bootstrapMal();
+    }
+  }
+
+  const malViewerChange = changes[STORAGE_KEYS.malViewer];
+  const mal = malStore.get();
+  if (malViewerChange && mal.status === 'logged-in' && isMalViewer(malViewerChange.newValue)) {
+    malStore.set({ ...mal, viewer: malViewerChange.newValue });
+  }
+
   if (changes[STORAGE_KEYS.pendingReviews] || changes[STORAGE_KEYS.recentSyncs]) void loadSyncData();
 });
 
 store.subscribe(render);
+malStore.subscribe(render);
 syncStore.subscribe(render);
-void bootstrap();
+void loadSyncData();
+void bootstrapAniList();
+void bootstrapMal();

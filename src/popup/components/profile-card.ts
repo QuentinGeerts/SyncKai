@@ -36,22 +36,41 @@ function renderSkeleton(): HTMLElement {
   );
 }
 
-export function renderProfileCard(viewer: AniListViewer | null): HTMLElement {
+export function renderProfileCard(viewer: AniListViewer | null, onLogout: () => void): HTMLElement {
   if (!viewer) return renderSkeleton();
 
+  // Lien et bouton côte à côte : un bouton ne peut pas être imbriqué dans un <a>
   return h(
-    'a',
-    {
-      class: `${CARD_CLASS} group transition hover:bg-zinc-800/70 hover:ring-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400`,
-      attrs: { href: viewer.siteUrl, target: '_blank', rel: 'noopener noreferrer', title: 'Ouvrir mon profil AniList' },
-    },
-    renderAvatar(viewer),
+    'div',
+    { class: 'flex items-center rounded-xl bg-zinc-900 ring-1 ring-zinc-800' },
     h(
-      'div',
-      { class: 'min-w-0 flex-1' },
-      h('p', { class: 'truncate text-sm font-semibold text-zinc-100' }, viewer.name),
-      h('p', { class: 'text-[11px] text-zinc-500 group-hover:text-sky-400' }, 'Voir le profil AniList'),
+      'a',
+      {
+        class: 'group flex min-w-0 flex-1 items-center gap-3 rounded-xl p-3 transition hover:bg-zinc-800/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400',
+        attrs: { href: viewer.siteUrl, target: '_blank', rel: 'noopener noreferrer', title: 'Ouvrir mon profil AniList' },
+      },
+      renderAvatar(viewer),
+      h(
+        'div',
+        { class: 'min-w-0 flex-1' },
+        h('p', { class: 'truncate text-sm font-semibold text-zinc-100' }, viewer.name),
+        h('p', { class: 'text-[11px] text-zinc-500 group-hover:text-sky-400' }, 'AniList · voir le profil'),
+      ),
+      icon('external', 'h-3.5 w-3.5 text-zinc-500 group-hover:text-sky-400'),
     ),
-    icon('external', 'h-3.5 w-3.5 text-zinc-500 group-hover:text-sky-400'),
+    renderLogoutButton('Déconnecter AniList', onLogout),
+  );
+}
+
+/** Bouton icône de déconnexion d'un service (partagé avec la carte MyAnimeList) */
+export function renderLogoutButton(label: string, onLogout: () => void): HTMLElement {
+  return h(
+    'button',
+    {
+      class: 'mr-2 shrink-0 cursor-pointer rounded-md p-1.5 text-zinc-500 transition hover:bg-zinc-800 hover:text-red-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400',
+      attrs: { type: 'button', title: label, 'aria-label': label },
+      on: { click: onLogout },
+    },
+    icon('logout', 'h-3.5 w-3.5'),
   );
 }

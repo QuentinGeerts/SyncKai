@@ -1,10 +1,13 @@
 import { isRecord } from '../../shared/guards';
 import { toSafeUrl } from '../../shared/url';
-import { anilistQuery } from './client';
+import { anilistPublicQuery } from './client';
+import { ApiError } from './errors';
 
 /** Fiche AniList normalisée (les champs absents de l'API deviennent null / []) */
 export interface AniListMedia {
   id: number;
+  /** Identifiant MyAnimeList de la même fiche (null si AniList ne le connaît pas) */
+  idMal: number | null;
   format: string | null;
   episodes: number | null;
   startDate: { year: number | null; month: number | null; day: number | null } | null;
@@ -19,6 +22,7 @@ export interface AniListMedia {
 
 const MEDIA_FIELDS = /* GraphQL */ `
   id
+  idMal
   format
   episodes
   startDate { year month day }
@@ -62,6 +66,7 @@ function parseMedia(value: unknown): AniListMedia | null {
 
   return {
     id: value.id,
+    idMal: num(value.idMal),
     format: str(value.format),
     episodes: num(value.episodes),
     startDate: start ? { year: num(start.year), month: num(start.month), day: num(start.day) } : null,
@@ -92,10 +97,27 @@ function parsePage(data: PageData): AniListMedia[] {
 // ─── API ──────────────────────────────────────────────────────────────────
 
 export async function searchAnime(search: string): Promise<AniListMedia[]> {
-  return parsePage(await anilistQuery(SEARCH_QUERY, isPageData, { search }));
+  return parsePage(await anilistPublicQuery(SEARCH_QUERY, isPageData, { search }));
 }
 
 export async function getAnimeByIds(ids: readonly number[]): Promise<AniListMedia[]> {
   if (ids.length === 0) return [];
-  return parsePage(await anilistQuery(BY_IDS_QUERY, isPageData, { ids }));
+  return parsePage(await anilistPublicQuery(BY_IDS_QUERY, isPageData, { ids }));
+}
+
+const BY_ID_QUERY = /* GraphQL */ `
+  query AnimeById($id: Int!) {
+    Media(id: $id, type: ANIME) { ${MEDIA_FIELDS} }
+  }
+`;
+
+function isMediaData(data: unknown): data is { Media: unknown } {
+  return isRecord(data) && isRecord(data.Media);
+}
+
+/** Fiche du catalogue par identifiant AniList (sans compte requis). */
+export async function getAnimeById(id: number): Promise<AniListMedia> {
+  const media = parseMedia((await anilistPublicQuery(BY_ID_QUERY, isMediaData, { id })).Media);
+  if (!media) throw new ApiError('INVALID_RESPONSE', 'Réponse d’AniList inattendue.');
+  return media;
 }
