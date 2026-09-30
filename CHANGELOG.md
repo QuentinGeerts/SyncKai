@@ -3,7 +3,7 @@
 Toutes les évolutions notables de SyncKai sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions selon [SemVer](https://semver.org/lang/fr/).
 
-## [Non publié]
+## [1.1.0] - 2026-09-30
 
 ### Ajouté
 
@@ -48,4 +48,5 @@ Première version : synchronisation automatique Crunchyroll → AniList.
 - **Vérification manuelle** des correspondances incertaines depuis le popup (fiches suggérées, recherche, numéro d'épisode), avec badge sur l'icône de l'extension.
 - **Dernières synchros** dans le popup, avec correction a posteriori d'une correspondance.
 
+[1.1.0]: https://github.com/QuentinGeerts/SyncKai/releases/tag/v1.1.0
 [1.0.0]: https://github.com/QuentinGeerts/SyncKai/releases/tag/v1.0.0
