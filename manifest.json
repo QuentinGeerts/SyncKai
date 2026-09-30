@@ -3,6 +3,12 @@
   "name": "SyncKai",
   "version": "1.0.0",
   "description": "Synchronise automatiquement tes animes vers AniList.",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuaow2pnGRX5eLsWNuB5+11/L9h635+ywH7VSpsFlK50pPSswABMhYYgv3JShaBR39SpY66jqowrQ5tS3iRaipV3cJuocwQ3NmbQy+WZpz89CmYP8mXfpMCIKosXk+S57GtHJJYA2InZc0JBe6fUdgtn+HaqnhXmQ+667+fTKRK9WrEv7fL99f5QjpzfGCZoi2HFo5gxEWmsYUF0kYQfvTgXWXZgOGLcbzcaa84bKWvc0OTzJVvSuAnwVlp06VURqCgWuydvv1d/z4Hg3XYizBhiDpA3lvVOW38uD0B/gtTaPlmcFNAaqV8YWzyzl3FX9ubHmNrvfwunCtuO96FhzGwIDAQAB",
   "permissions": [
     "storage",
@@ -27,6 +33,10 @@
     }
   ],
   "action": {
-    "default_popup": "src/popup/popup.html"
+    "default_popup": "src/popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
   }
 }

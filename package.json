@@ -7,13 +7,15 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "icons": "tsc --noEmit -p scripts && node scripts/generate-icons.ts"
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^3.0.0",
     "@tailwindcss/cli": "^4.3.3",
     "@tailwindcss/vite": "^4.3.3",
     "@types/chrome": "^0.3.4",
+    "@types/node": "^24.19.0",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",
     "vite": "^8.3.0",
