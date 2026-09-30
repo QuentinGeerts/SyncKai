@@ -185,10 +185,14 @@ export function resolveTarget(episode: EpisodeNumbers, candidates: MediaCandidat
   const linked = seasons.filter((c) => c.link !== null);
   const animeKey = normalizeTitle(episode.animeTitle);
 
-  // Sans lien vers la plateforme, repli sur un titre identique (confiance faible)
+  // Sans lien vers la plateforme, repli sur un titre identique
   const pool = linked.length > 0 ? linked : seasons.filter((c) => c.titles.some((t) => normalizeTitle(t) === animeKey));
   if (pool.length === 0) return { ok: false, reason: `Aucune fiche AniList trouvée pour « ${episode.animeTitle} »` };
-  const level = (isConfident: boolean): 'high' | 'low' => (isConfident && linked.length > 0 ? 'high' : 'low');
+
+  // Titre seul jugé fiable uniquement s'il désigne UNE fiche série et qu'il s'agit de la 1re saison
+  // (fréquent sur ADN, rarement lié sur AniList). Remakes au même titre → plusieurs fiches → à vérifier.
+  const isTrustedTitleMatch = linked.length === 0 && pool.length === 1 && (episode.seasonNumber ?? 1) === 1;
+  const level = (isConfident: boolean): 'high' | 'low' => (isConfident && (linked.length > 0 || isTrustedTitleMatch) ? 'high' : 'low');
 
   const displayed = episode.displayedEpisodeNumber;
   const relative = episode.seasonEpisodeNumber ?? displayed;
@@ -215,8 +219,13 @@ export function resolveTarget(episode: EpisodeNumbers, candidates: MediaCandidat
       episodes: candidate.episodes,
       progress,
       confidence,
-      // Sans lien plateforme, c'est l'absence de lien (et non la règle appliquée) qui rend le choix incertain
-      reason: linked.length === 0 ? 'Fiche trouvée par son titre uniquement (aucun lien vers la plateforme sur AniList)' : reason,
+      reason:
+        linked.length === 0
+          ? confidence === 'high'
+            ? 'Seule fiche AniList portant ce titre (saison 1)'
+            : // Sans lien plateforme, c'est l'absence de lien (et non la règle appliquée) qui rend le choix incertain
+              'Fiche trouvée par son titre uniquement (aucun lien vers la plateforme sur AniList)'
+          : reason,
     },
   });
 

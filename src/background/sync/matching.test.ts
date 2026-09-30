@@ -149,15 +149,31 @@ describe('resolveTarget', () => {
     expect(result).toMatchObject({ ok: true, target: { mediaId: 1, confidence: 'low' } });
   });
 
-  it('sans lien plateforme : repli sur le titre exact, en confiance faible', () => {
-    const result = resolveTarget(episode({ animeTitle: 'Frieren' }), [
+  it('sans lien plateforme : titre exact unique en saison 1 → confiance élevée (ex : Fairy Tail sur ADN)', () => {
+    const result = resolveTarget(episode({ animeTitle: 'Fairy Tail', seasonNumber: 1, seasonEpisodeNumber: 1, displayedEpisodeNumber: 1 }), [
+      candidate({ id: 6702, link: null, episodes: 175, titles: ['FAIRY TAIL', 'Fairy Tail'] }),
+      candidate({ id: 20626, link: null, episodes: 102, titles: ['FAIRY TAIL (2014)'] }),
+      candidate({ id: 99, link: null, format: 'MOVIE', titles: ['Fairy Tail'] }),
+    ]);
+    expect(result).toMatchObject({ ok: true, target: { mediaId: 6702, progress: 1, confidence: 'high', reason: expect.stringContaining('Seule fiche') } });
+  });
+
+  it('sans lien plateforme : saison > 1 → confiance faible', () => {
+    const result = resolveTarget(episode({ animeTitle: 'Frieren', seasonNumber: 2, seasonEpisodeNumber: 3, displayedEpisodeNumber: 3 }), [
       candidate({ id: 1, link: null, titles: ['Sousou no Frieren', 'Frieren'] }),
-      candidate({ id: 2, link: null, titles: ['Frieren: Beyond Journey’s End Mini Anime'] }),
     ]);
     expect(result).toMatchObject({
       ok: true,
       target: { mediaId: 1, confidence: 'low', reason: expect.stringContaining('aucun lien vers la plateforme') },
     });
+  });
+
+  it('sans lien plateforme : remakes au même titre → confiance faible', () => {
+    const result = resolveTarget(episode({ animeTitle: 'Fruits Basket' }), [
+      candidate({ id: 120, link: null, episodes: 26, startDate: 20010705, titles: ['Fruits Basket'] }),
+      candidate({ id: 105334, link: null, episodes: 25, startDate: 20190406, titles: ['Fruits Basket (2019)', 'Fruits Basket'] }),
+    ]);
+    expect(result).toMatchObject({ ok: true, target: { confidence: 'low' } });
   });
 
   it('échoue si aucune fiche ne correspond', () => {

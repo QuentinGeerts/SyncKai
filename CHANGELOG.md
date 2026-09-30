@@ -9,6 +9,7 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), ver
 
 - **Adapter ADN** (animationdigitalnetwork.com) : détection des épisodes (JSON-LD, repli sur le lecteur video.js), navigation entre épisodes sans rechargement, complétion au pourcentage réglé (ADN ne fournit pas le début du générique).
 - Correspondance AniList via les liens ADN des fiches (`/video/{id}-{slug}`, ancien format par slug).
+- Correspondance automatique par titre quand une seule fiche AniList (série) porte exactement ce titre et qu'il s'agit de la saison 1 ; les autres cas sans lien plateforme restent à vérifier.
 
 ### Modifié
 
