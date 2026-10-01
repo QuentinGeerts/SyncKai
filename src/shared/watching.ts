@@ -1,3 +1,4 @@
+import { getLocale, t, tl, type Locale } from '../i18n';
 import type { StreamingPlatform } from './episode.types';
 import type { NextEpisodeBadge, PlatformLink, WatchingEntry, WatchingSort } from './watching.types';
 
@@ -19,13 +20,13 @@ export function airedEpisodes(entry: WatchingEntry): number | null {
 
 /** Délai compact avant une sortie : "12 min", "18 h", "2 j" (arrondi à l'inférieur, minimum 1). */
 function formatCountdown(ms: number): string {
-  if (ms < HOUR) return `${Math.max(1, Math.floor(ms / MINUTE))} min`;
-  if (ms < DAY) return `${Math.max(1, Math.floor(ms / HOUR))} h`;
-  return `${Math.floor(ms / DAY)} j`;
+  if (ms < HOUR) return t('time.countdown.minutes', { count: Math.max(1, Math.floor(ms / MINUTE)) });
+  if (ms < DAY) return t('time.countdown.hours', { count: Math.max(1, Math.floor(ms / HOUR)) });
+  return t('time.countdown.days', { count: Math.floor(ms / DAY) });
 }
 
 /**
- * Pastille d'état d'une ligne, en français, à l'instant `now` (ms) :
+ * Pastille d'état d'une ligne, dans la langue active, à l'instant `now` (ms) — exemples en français :
  * - available : "Ép. 3 disponible" (des épisodes sortis n'ont pas encore été vus)
  * - upcoming  : "Ép. 5 dans 18 h" / "Ép. 3 dans 2 j" / "Ép. 4 dans 12 min",
  *               ou "Prochain épisode bientôt" (série en cours de diffusion sans date à venir connue)
@@ -38,17 +39,17 @@ export function nextEpisodeBadge(entry: WatchingEntry, now: number): NextEpisode
   const aired = next && next.airingAt <= now ? next.episode : airedEpisodes(entry);
 
   if (aired !== null && aired > entry.progress) {
-    return { kind: 'available', label: `Ép. ${entry.progress + 1} disponible` };
+    return { kind: 'available', label: t('watching.badge.available', { episode: entry.progress + 1 }) };
   }
   if (next && next.airingAt > now) {
-    return { kind: 'upcoming', label: `Ép. ${next.episode} dans ${formatCountdown(next.airingAt - now)}` };
+    return { kind: 'upcoming', label: t('watching.badge.upcoming', { episode: next.episode, delay: formatCountdown(next.airingAt - now) }) };
   }
-  if (isFinished(entry)) return { kind: 'finished', label: 'Série terminée' };
+  if (isFinished(entry)) return { kind: 'finished', label: t('watching.badge.finished') };
   // Diffusion en cours, ou épisode annoncé déjà passé (cache) hors pause : la suite arrive
   if (entry.airingStatus === 'RELEASING' || (next && entry.airingStatus !== 'HIATUS')) {
-    return { kind: 'upcoming', label: 'Prochain épisode bientôt' };
+    return { kind: 'upcoming', label: t('watching.badge.soon') };
   }
-  return { kind: 'unknown', label: 'Date inconnue' };
+  return { kind: 'unknown', label: t('watching.badge.unknown') };
 }
 
 const GROUP_ORDER: Record<NextEpisodeBadge['kind'], number> = { available: 0, upcoming: 1, unknown: 2, finished: 3 };
@@ -82,8 +83,14 @@ export function sortWatching(entries: readonly WatchingEntry[], now: number): Wa
   return ranked.map(({ entry }) => entry);
 }
 
-const titleCollator = new Intl.Collator('fr', { sensitivity: 'base' });
-const byTitle = (a: WatchingEntry, b: WatchingEntry): number => titleCollator.compare(a.title, b.title);
+/** Comparateur de titres de la langue active (recréé seulement quand la langue change) */
+let collator: { locale: Locale; compare: (a: string, b: string) => number } | null = null;
+function compareTitles(a: string, b: string): number {
+  const locale = getLocale();
+  if (collator?.locale !== locale) collator = { locale, compare: new Intl.Collator(locale, { sensitivity: 'base' }).compare };
+  return collator.compare(a, b);
+}
+const byTitle = (a: WatchingEntry, b: WatchingEntry): number => compareTitles(a.title, b.title);
 
 /** Épisodes restants à voir, null si le total est inconnu */
 const remainingEpisodes = (entry: WatchingEntry): number | null =>
@@ -129,12 +136,15 @@ export function pickHeroEntry(entries: readonly WatchingEntry[]): WatchingEntry 
   return hero;
 }
 
-/** "il y a 20 min", "il y a 2 h", "hier", "il y a 3 jours" — pour la barre d'état et les métadonnées. */
-export function formatRelativeTime(timestamp: number, now: number): string {
+/**
+ * "il y a 20 min", "il y a 2 h", "hier", "il y a 3 jours" (fr) — pour la barre d'état et les métadonnées.
+ * Langue active par défaut ; `locale` permet de forcer une langue (tests).
+ */
+export function formatRelativeTime(timestamp: number, now: number, locale: Locale = getLocale()): string {
   const diff = now - timestamp;
-  if (diff < MINUTE) return 'à l’instant';
-  if (diff < HOUR) return `il y a ${Math.floor(diff / MINUTE)} min`;
-  if (diff < DAY) return `il y a ${Math.floor(diff / HOUR)} h`;
-  if (diff < 2 * DAY) return 'hier';
-  return `il y a ${Math.floor(diff / DAY)} jours`;
+  if (diff < MINUTE) return tl(locale, 'time.justNow');
+  if (diff < HOUR) return tl(locale, 'time.minutesAgo', { count: Math.floor(diff / MINUTE) });
+  if (diff < DAY) return tl(locale, 'time.hoursAgo', { count: Math.floor(diff / HOUR) });
+  if (diff < 2 * DAY) return tl(locale, 'time.yesterday');
+  return tl(locale, 'time.daysAgo', { count: Math.floor(diff / DAY) });
 }

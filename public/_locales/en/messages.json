@@ -1,0 +1,14 @@
+{
+  "extName": {
+    "message": "SyncKai",
+    "description": "Extension name"
+  },
+  "extDescription": {
+    "message": "Automatically syncs your anime (Crunchyroll, ADN) to AniList and MyAnimeList.",
+    "description": "Extension description (Chrome Web Store, chrome://extensions)"
+  },
+  "cmdCompleteEpisode": {
+    "message": "Mark the current episode as watched",
+    "description": "Keyboard shortcut description"
+  }
+}

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { isScore10 } from '../shared/engagement.types';
 import { formatScoreLabel, formatStarValue, halfValue, isStarValue, rateAriaLabel, STAR_COUNT, STAR_VALUES, starFill, stepStarValue } from './rating';
+import { setLocale } from '../i18n';
+
+// Textes attendus en français
+setLocale('fr');
 
 describe('STAR_VALUES', () => {
   it('20 valeurs de 0,5 à 10, toutes des notes sur 10 valides (envoyées sans conversion)', () => {

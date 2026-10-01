@@ -1,3 +1,5 @@
+import { getLocale, t } from '../i18n';
+
 // Notation 10 étoiles avec demi-étoiles : 20 valeurs (0,5 → 10), envoyées telles quelles comme Score10
 
 export const STAR_COUNT = 10;
@@ -11,9 +13,9 @@ export function isStarValue(value: number): boolean {
   return value >= STAR_STEP && value <= STAR_COUNT && Number.isInteger(value / STAR_STEP);
 }
 
-/** "8,5" (virgule décimale française) */
+/** "8,5" en français et en allemand, "8.5" en anglais (séparateur décimal de la langue active) */
 export function formatStarValue(value: number): string {
-  return String(value).replace('.', ',');
+  return new Intl.NumberFormat(getLocale(), { maximumFractionDigits: 1 }).format(value);
 }
 
 /** Libellé visible de la valeur survolée / choisie : "8,5/10" ("–/10" sans valeur) */
@@ -23,7 +25,7 @@ export function formatScoreLabel(value: number): string {
 
 /** Libellé du bouton d'une valeur : "Noter 8,5 sur 10" */
 export function rateAriaLabel(value: number): string {
-  return `Noter ${formatStarValue(value)} sur ${STAR_COUNT}`;
+  return t('rating.rateAria', { value: formatStarValue(value), max: STAR_COUNT });
 }
 
 /** Remplissage de l'étoile `index` (1 à 10) pour une valeur affichée (0 = aucune) */

@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import type { PendingRating } from '../../shared/engagement.types';
 import { formatRelativeTime } from '../../shared/watching';
 import { h, nodes } from '../../ui/dom';
@@ -30,7 +31,7 @@ function renderItem(item: PendingRating, { ratings, now, onRate, onIgnore }: Rat
   const busy = ratings.busyIds.has(item.id);
   const error = ratings.errors.get(item.id);
   const stars = createStarRating({
-    label: `Noter ${item.title}`,
+    label: t('rating.groupLabel', { title: item.title }),
     classes: STAR_CLASSES,
     focusKey: `rate-${item.id}`,
     disabled: busy,
@@ -46,21 +47,21 @@ function renderItem(item: PendingRating, { ratings, now, onRate, onIgnore }: Rat
       'div',
       { class: 'flex min-w-0 flex-1 flex-col gap-0.5' },
       h('span', { class: 'truncate text-[13px] font-bold', attrs: { title: item.title } }, item.title),
-      h('span', { class: 'truncate text-[11px] font-semibold text-muted' }, `Terminé ${formatRelativeTime(item.completedAt, now)}`),
+      h('span', { class: 'truncate text-[11px] font-semibold text-muted' }, t('ratings.completed', { relative: formatRelativeTime(item.completedAt, now) })),
       h(
         'div',
         { class: 'flex items-center justify-between gap-1' },
         stars,
         busy
-          ? h('span', { class: 'flex h-8 items-center px-2 text-muted', attrs: { role: 'status', 'aria-label': 'Enregistrement de la note…' } }, icon('spinner', 'h-3.5 w-3.5 motion-safe:animate-spin'))
+          ? h('span', { class: 'flex h-8 items-center px-2 text-muted', attrs: { role: 'status', 'aria-label': t('prompt.rating.saving') } }, icon('spinner', 'h-3.5 w-3.5 motion-safe:animate-spin'))
           : h(
               'button',
               {
                 class: `${BTN_GHOST} px-2.5 text-muted`,
-                attrs: { type: 'button', 'aria-label': `Ignorer la note de ${item.title}`, 'data-focus': `rate-ignore-${item.id}` },
+                attrs: { type: 'button', 'aria-label': t('ratings.ignoreAria', { title: item.title }), 'data-focus': `rate-ignore-${item.id}` },
                 on: { click: () => onIgnore(item) },
               },
-              'Ignorer',
+              t('common.ignore'),
             ),
       ),
       error && h('span', { class: 'flex items-start gap-1 text-[11px] font-bold text-danger', attrs: { role: 'alert' } }, icon('alert', 'mt-px h-3 w-3'), error),
@@ -75,9 +76,9 @@ export function renderRatingSection(props: RatingSectionProps): HTMLElement | nu
 
   return h(
     'section',
-    { class: 'flex flex-col gap-2', attrs: { 'aria-label': 'Séries à noter' } },
+    { class: 'flex flex-col gap-2', attrs: { 'aria-label': t('ratings.section') } },
     ...nodes([
-      sectionTitle(`À noter (${items.length})`, { text: 'ヒョウカ', class: 'text-sakura' }),
+      sectionTitle(t('ratings.sectionTitle', { count: items.length }), { text: 'ヒョウカ', class: 'text-sakura' }),
       notice &&
         h(
           'p',

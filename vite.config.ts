@@ -5,6 +5,12 @@ import manifest from './manifest.json';
 
 export default defineConfig({
   plugins: [tailwindcss(), crx({ manifest })],
+  build: {
+    rollupOptions: {
+      // Pages d'extension hors manifeste (ouvertes via chrome.runtime.getURL)
+      input: { import: 'src/import/import.html' },
+    },
+  },
   define: {
     // Horodatage du build, loggé au démarrage pour vérifier quelle version tourne dans un onglet
     __SYNCKAI_BUILD__: JSON.stringify(new Date().toISOString()),

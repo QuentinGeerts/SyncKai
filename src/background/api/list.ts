@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import { isRecord } from '../../shared/guards';
 import { getValidToken } from '../../shared/storage';
 import type { ListEntryState, ListStatus, WriteStatus } from '../sync/rules';
@@ -111,7 +112,7 @@ export async function getMediaListInfo(mediaId: number): Promise<MediaListInfo> 
 
 function parseSaved(data: SaveProgressData): ListEntryState {
   const entry = parseEntry(data.SaveMediaListEntry);
-  if (!entry) throw new ApiError('INVALID_RESPONSE', 'Réponse d’AniList inattendue après la mise à jour.');
+  if (!entry) throw new ApiError('INVALID_RESPONSE', t('api.invalidAfterUpdate.anilist'));
   return entry;
 }
 

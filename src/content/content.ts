@@ -1,3 +1,4 @@
+import { initI18n } from '../i18n';
 import { isContentMessage } from '../shared/content-messages';
 import type { StreamingAdapter } from './adapters/adapter';
 import { adnAdapter } from './adapters/adn';
@@ -45,4 +46,5 @@ function main(): void {
   watchUrl(handleUrl);
 }
 
-main();
+// Langue des toasts lue avant le démarrage (puis suivie via storage.onChanged)
+void initI18n().then(main);

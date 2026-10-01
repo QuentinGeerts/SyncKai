@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import type { AniListErrorCode } from '../shared/anilist.types';
 import { refreshReviewBadge } from '../shared/badge';
 import { addPendingRating, recordRewatchDecline, removePendingRating } from '../shared/engagement-store';
@@ -29,7 +30,7 @@ async function resolveTargets(media: MediaRef): Promise<Target[] | null> {
 }
 
 function toErrorOutcome(error: unknown): ServiceOutcome {
-  return error instanceof ApiError ? { status: 'error', message: error.message, code: error.code } : { status: 'error', message: 'Erreur inattendue.' };
+  return error instanceof ApiError ? { status: 'error', message: error.message, code: error.code } : { status: 'error', message: t('error.unexpected') };
 }
 
 function toSyncError(error: unknown, fallback: string): SyncOutcome {
@@ -58,13 +59,13 @@ export async function rateMedia(media: MediaRef, score: Score10): Promise<SyncOu
   try {
     const targets = await resolveTargets(media);
     if (targets === null) return { status: 'not-connected' };
-    if (targets.length === 0) return { status: 'error', message: 'Aucun service connecté ne suit cette série.' };
+    if (targets.length === 0) return { status: 'error', message: t('sync.noServiceFollows') };
 
     const results = await Promise.all(
       targets.map((target) =>
         onService(target, (current) => {
           // Noter une série absente de la liste l'y ajouterait sans statut : on s'abstient
-          if (current.entry === null) return 'Absente de ta liste';
+          if (current.entry === null) return t('engagement.notInList');
           return async () => {
             const saved = await target.tracker.saveScore(target.id, score);
             console.info(LOG_PREFIX, `✔ ${TRACKER_LABELS[target.tracker.id]} : ${current.title} noté ${score}/10`);
@@ -80,7 +81,7 @@ export async function rateMedia(media: MediaRef, score: Score10): Promise<SyncOu
     }
     return { status: 'synced', mediaTitle: media.title, results };
   } catch (error: unknown) {
-    return toSyncError(error, 'Erreur inattendue pendant l’enregistrement de la note.');
+    return toSyncError(error, t('error.unexpectedRating'));
   }
 }
 
@@ -92,7 +93,7 @@ export async function deferRating(media: MediaRef, coverUrl: string | null): Pro
     return { ok: true, data: null };
   } catch (error: unknown) {
     console.error(LOG_PREFIX, 'Note en attente non enregistrée :', error);
-    return { ok: false, code: 'API_ERROR', message: 'Impossible d’enregistrer la note pour plus tard.' };
+    return { ok: false, code: 'API_ERROR', message: t('engagement.deferFailed') };
   }
 }
 
@@ -101,14 +102,14 @@ export async function startRewatch(media: MediaRef, progress: number): Promise<S
   try {
     const targets = await resolveTargets(media);
     if (targets === null) return { status: 'not-connected' };
-    if (targets.length === 0) return { status: 'error', message: 'Aucun service connecté ne suit cette série.' };
+    if (targets.length === 0) return { status: 'error', message: t('sync.noServiceFollows') };
 
     const results = await Promise.all(
       targets.map((target) =>
         onService(target, (current) => {
-          if (current.entry?.status !== 'COMPLETED') return 'Fiche non terminée : pas de revisionnage';
-          if (current.episodes !== null && progress >= current.episodes) return `Épisode ${progress} : dernier épisode, pas de revisionnage`;
-          if (current.episodes !== null && progress > current.episodes) return `Épisode ${progress} au-delà des ${current.episodes} épisodes de la fiche`;
+          if (current.entry?.status !== 'COMPLETED') return t('engagement.notCompleted');
+          if (current.episodes !== null && progress >= current.episodes) return t('engagement.lastEpisode', { progress });
+          if (current.episodes !== null && progress > current.episodes) return t('sync.beyondEntry', { progress, total: current.episodes });
           return async () => {
             const saved = await target.tracker.startRewatch(target.id, progress);
             console.info(LOG_PREFIX, `✔ ${TRACKER_LABELS[target.tracker.id]} : revisionnage de ${current.title}, épisode ${saved.progress}`);
@@ -119,7 +120,7 @@ export async function startRewatch(media: MediaRef, progress: number): Promise<S
     );
     return { status: 'synced', mediaTitle: media.title, results };
   } catch (error: unknown) {
-    return toSyncError(error, 'Erreur inattendue pendant le démarrage du revisionnage.');
+    return toSyncError(error, t('error.unexpectedRewatch'));
   }
 }
 
@@ -130,6 +131,6 @@ export async function declineRewatch(media: MediaRef): Promise<Result<null, AniL
     return { ok: true, data: null };
   } catch (error: unknown) {
     console.error(LOG_PREFIX, 'Refus de revisionnage non enregistré :', error);
-    return { ok: false, code: 'API_ERROR', message: 'Impossible d’enregistrer ton choix.' };
+    return { ok: false, code: 'API_ERROR', message: t('engagement.declineFailed') };
   }
 }

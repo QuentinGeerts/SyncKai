@@ -9,6 +9,10 @@ import {
   sortWatchingBy,
 } from './watching';
 import { isWatchingList, isWatchingSort, WATCHING_SORTS, type WatchingEntry } from './watching.types';
+import { setLocale } from '../i18n';
+
+// Textes attendus en français
+setLocale('fr');
 
 const NOW = Date.UTC(2026, 9, 1, 12, 0, 0);
 const MIN = 60_000;

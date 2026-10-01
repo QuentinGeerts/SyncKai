@@ -3,6 +3,15 @@
 Toutes les évolutions notables de SyncKai sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.7.0] - 2026-10-01
+
+Sauvegarde et interface multilingue.
+
+### Ajouté
+
+- **Export / import** (Réglages › Sauvegarde) : fichier JSON avec réglages, correspondances, séries exclues, séries à noter, refus de revisionnage, vérifications en attente et historique — jamais les connexions AniList/MAL. Import dans un onglet dédié : validation complète, aperçu, mode **Fusionner** (par défaut) ou **Remplacer** (avec confirmation), option « Importer aussi les réglages ».
+- **Interface en français, anglais et allemand** (Réglages › Langue : Automatique, Français, English, Deutsch). Nom et description de l’extension traduits (`_locales`). Pluriels, dates et délais localisés (`Intl`). Anglais par défaut pour les autres langues de Chrome.
+
 ## [1.6.0] - 2026-10-01
 
 Note, revisionnage et alertes de nouveaux épisodes.

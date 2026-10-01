@@ -1,3 +1,4 @@
+import { t, tp } from '../../i18n';
 import { h } from '../../ui/dom';
 import { icon, mochi } from '../../ui/icons';
 import type { Screen } from '../state';
@@ -27,7 +28,7 @@ export function renderHeader({ isSettings, onSettings }: HeaderProps): HTMLEleme
       'button',
       {
         class: `flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-colors hover:bg-raised ${isSettings ? 'bg-raised text-sakura' : 'bg-surface text-muted'}`,
-        attrs: { type: 'button', 'aria-label': 'Réglages', 'aria-pressed': String(isSettings), 'data-focus': 'gear' },
+        attrs: { type: 'button', 'aria-label': t('nav.settings'), 'aria-pressed': String(isSettings), 'data-focus': 'gear' },
         on: { click: onSettings },
       },
       icon('gear', 'h-[18px] w-[18px]'),
@@ -72,12 +73,12 @@ export function renderNav({ screen, pending, onNavigate }: NavProps): HTMLElemen
 
   return h(
     'nav',
-    { class: 'flex h-11 shrink-0 items-start px-4', attrs: { 'aria-label': 'Sections' } },
+    { class: 'flex h-11 shrink-0 items-start px-4', attrs: { 'aria-label': t('nav.sections') } },
     h(
       'div',
       { class: 'flex flex-1 gap-1 rounded-full bg-surface p-0.5' },
-      tab('watching', 'En cours', null, null),
-      tab('activity', 'Activité', pending > 0 ? `Activité, ${pending} élément${pending > 1 ? 's' : ''} à traiter` : null, badge),
+      tab('watching', t('nav.watching'), null, null),
+      tab('activity', t('nav.activity'), pending > 0 ? tp('nav.activityPending', pending) : null, badge),
     ),
   );
 }
@@ -95,12 +96,12 @@ export function renderSettingsBar(onBack: () => void, status: HTMLElement): HTML
         on: { click: onBack },
       },
       icon('back', 'h-4 w-4', '2.4'),
-      'Retour',
+      t('nav.back'),
     ),
     h(
       'div',
       { class: 'flex h-9 flex-1 items-center justify-center gap-1.5' },
-      h('h1', { class: 'm-0 font-display text-[15px] font-extrabold' }, 'Réglages'),
+      h('h1', { class: 'm-0 font-display text-[15px] font-extrabold' }, t('nav.settings')),
       kanaLabel('セッテイ', 'text-sakura'),
     ),
     h('div', { class: 'flex h-9 w-[76px] shrink-0 items-center justify-end' }, status),

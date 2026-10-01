@@ -1,3 +1,4 @@
+import { t, type MessageKey } from '../../i18n';
 import { TRACKER_LABELS, type TrackerId } from '../../shared/tracker.types';
 import { h, nodes } from '../../ui/dom';
 import { icon, mochi } from '../../ui/icons';
@@ -11,9 +12,9 @@ interface OnboardingProps {
   onLogin: (service: TrackerId) => void;
 }
 
-const COPY: Record<TrackerId, { title: string; hint: string }> = {
-  anilist: { title: 'Connecter AniList', hint: 'Recommandé pour les correspondances' },
-  mal: { title: 'Connecter MyAnimeList', hint: 'Utilisable seul ou avec AniList' },
+const HINTS: Record<TrackerId, MessageKey> = {
+  anilist: 'onboarding.hint.anilist',
+  mal: 'onboarding.hint.mal',
 };
 
 function renderConnect(service: TrackerId, state: AccountState<unknown>, onLogin: (service: TrackerId) => void): HTMLElement[] {
@@ -31,8 +32,12 @@ function renderConnect(service: TrackerId, state: AccountState<unknown>, onLogin
     h(
       'span',
       { class: 'flex min-w-0 flex-1 flex-col' },
-      h('span', { class: 'text-[14px] leading-[18px] font-bold' }, pending ? 'Connexion…' : expired ? `Reconnecter ${TRACKER_LABELS[service]}` : COPY[service].title),
-      h('span', { class: `text-[11px] leading-[15px] font-semibold ${expired ? 'text-danger' : 'text-muted'}` }, expired ? 'Session expirée' : COPY[service].hint),
+      h(
+        'span',
+        { class: 'text-[14px] leading-[18px] font-bold' },
+        pending ? t('common.connecting') : t(expired ? 'common.reconnectService' : 'common.connectService', { service: TRACKER_LABELS[service] }),
+      ),
+      h('span', { class: `text-[11px] leading-[15px] font-semibold ${expired ? 'text-danger' : 'text-muted'}` }, expired ? t('common.sessionExpired') : t(HINTS[service])),
     ),
     pending ? icon('spinner', 'h-4 w-4 text-muted motion-safe:animate-spin') : icon('chevronRight', 'h-4 w-4 text-muted', '2.4'),
   );
@@ -58,20 +63,16 @@ export function renderOnboarding({ anilist, mal, onLogin }: OnboardingProps): HT
       { class: 'flex flex-col items-center gap-1 pt-2 text-center', attrs: { 'aria-labelledby': 'sk-welcome-title' } },
       mochi('h-16 w-16', 'awake', true),
       h('span', { class: 'mt-2' }, kanaLabel('ヨウコソ', 'text-sakura')),
-      h('h1', { class: 'm-0 font-display text-[20px] leading-[26px] font-extrabold', attrs: { id: 'sk-welcome-title' } }, 'Bienvenue !'),
-      h(
-        'p',
-        { class: 'm-0 mt-1 max-w-[320px] text-[13px] leading-[19px] font-semibold text-muted' },
-        'Regarde tes animes sur Crunchyroll ou ADN : SyncKai met ta liste à jour à la fin de chaque épisode.',
-      ),
+      h('h1', { class: 'm-0 font-display text-[20px] leading-[26px] font-extrabold', attrs: { id: 'sk-welcome-title' } }, t('onboarding.welcome')),
+      h('p', { class: 'm-0 mt-1 max-w-[320px] text-[13px] leading-[19px] font-semibold text-muted' }, t('onboarding.intro')),
     ),
     h('div', { class: 'flex flex-col gap-2' }, ...renderConnect('anilist', anilist, onLogin), ...renderConnect('mal', mal, onLogin)),
     h(
       'ol',
-      { class: 'm-0 mt-auto flex list-none gap-2 border-t border-dotted border-line px-2 py-3', attrs: { 'aria-label': 'Comment ça marche' } },
-      step(1, 'Lance un épisode'),
-      step(2, 'SyncKai reconnaît la série'),
-      step(3, 'Ta liste est à jour au générique'),
+      { class: 'm-0 mt-auto flex list-none gap-2 border-t border-dotted border-line px-2 py-3', attrs: { 'aria-label': t('onboarding.howItWorks') } },
+      step(1, t('onboarding.step1')),
+      step(2, t('onboarding.step2')),
+      step(3, t('onboarding.step3')),
     ),
   );
 }

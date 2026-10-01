@@ -1,3 +1,5 @@
+import { t } from '../i18n';
+
 // Règles pures des alertes de sortie d'épisodes (testées sans chrome.*).
 
 const HOUR_S = 3600;
@@ -80,7 +82,6 @@ export interface PlannedNotification {
 }
 
 export const AIRING_NOTIFICATION_PREFIX = 'synckai-airing:';
-export const AIRING_MESSAGE = 'Diffusé au Japon · arrive généralement sur Crunchyroll/ADN dans les heures qui suivent';
 
 /** Une notification par sortie, ou un résumé unique au-delà de GROUP_THRESHOLD. */
 export function planNotifications(items: readonly AiringItem[]): PlannedNotification[] {
@@ -88,8 +89,8 @@ export function planNotifications(items: readonly AiringItem[]): PlannedNotifica
   if (items.length <= GROUP_THRESHOLD) {
     return items.map((item) => ({
       id: `${AIRING_NOTIFICATION_PREFIX}${item.scheduleId}`,
-      title: `Ép. ${item.episode} de ${item.title} est sorti`,
-      message: AIRING_MESSAGE,
+      title: t('airing.notification.single', { episode: item.episode, title: item.title }),
+      message: t('airing.notification.message'),
       mediaIds: [item.mediaId],
     }));
   }
@@ -97,8 +98,8 @@ export function planNotifications(items: readonly AiringItem[]): PlannedNotifica
   return [
     {
       id: `${AIRING_NOTIFICATION_PREFIX}group:${Math.max(...items.map((item) => item.scheduleId))}`,
-      title: `${items.length} nouveaux épisodes : ${titles.join(', ')}`,
-      message: AIRING_MESSAGE,
+      title: t('airing.notification.group', { count: items.length, titles: titles.join(', ') }),
+      message: t('airing.notification.message'),
       mediaIds: [...new Set(items.map((item) => item.mediaId))],
     },
   ];

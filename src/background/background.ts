@@ -1,3 +1,4 @@
+import { initI18n, t } from '../i18n';
 import { getMalViewer } from './api/mal';
 import { getViewer } from './api/viewer';
 import { getWatchingList } from './api/watching';
@@ -31,25 +32,36 @@ chrome.runtime.onStartup.addListener((): void => {
   void refreshReviewBadge();
 });
 
-/** Réponse de secours par type de message si un handler lève une exception inattendue */
-const UNEXPECTED_ERRORS: { [K in MessageType]: MessageResponse<K> } = {
-  LOGIN_ANILIST: { ok: false, code: 'UNKNOWN', message: 'Erreur inattendue.' },
-  GET_VIEWER: { ok: false, code: 'API_ERROR', message: 'Erreur inattendue.' },
-  LOGIN_MAL: { ok: false, code: 'UNKNOWN', message: 'Erreur inattendue.' },
-  GET_MAL_VIEWER: { ok: false, code: 'API_ERROR', message: 'Erreur inattendue.' },
-  EPISODE_COMPLETED: { status: 'error', message: 'Erreur inattendue pendant la synchronisation.' },
-  ADJUST_PROGRESS: { status: 'error', message: 'Erreur inattendue.' },
-  RETRY_QUEUED: { status: 'error', message: 'Erreur inattendue.' },
-  SEARCH_ANIME: { ok: false, code: 'API_ERROR', message: 'Erreur inattendue.' },
-  RESOLVE_REVIEW: { status: 'error', message: 'Erreur inattendue pendant la synchronisation.' },
-  REOPEN_REVIEW: { ok: false, code: 'API_ERROR', message: 'Erreur inattendue.' },
-  GET_WATCHING: { ok: false, code: 'API_ERROR', message: 'Erreur inattendue.' },
-  RATE_MEDIA: { status: 'error', message: 'Erreur inattendue pendant l’enregistrement de la note.' },
-  DEFER_RATING: { ok: false, code: 'API_ERROR', message: 'Erreur inattendue.' },
-  START_REWATCH: { status: 'error', message: 'Erreur inattendue pendant le démarrage du revisionnage.' },
-  DECLINE_REWATCH: { ok: false, code: 'API_ERROR', message: 'Erreur inattendue.' },
-  CHECK_AIRING: { checkedAt: 0, notified: 0, skipped: null, error: 'Erreur inattendue.' },
-};
+// Langue de l'interface (messages d'erreur, notifications) : lue au réveil, attendue avant chaque traitement
+const i18nReady = initI18n().catch((error: unknown) => console.warn('[SyncKai] Langue des réglages illisible :', error));
+
+/** Exécute `run` une fois la langue chargée */
+function afterI18n(run: () => unknown): void {
+  void i18nReady.then(run);
+}
+
+/** Réponse de secours par type de message si un handler lève une exception inattendue (traduite à la demande) */
+function unexpectedErrors(): { [K in MessageType]: MessageResponse<K> } {
+  const message = t('error.unexpected');
+  return {
+    LOGIN_ANILIST: { ok: false, code: 'UNKNOWN', message },
+    GET_VIEWER: { ok: false, code: 'API_ERROR', message },
+    LOGIN_MAL: { ok: false, code: 'UNKNOWN', message },
+    GET_MAL_VIEWER: { ok: false, code: 'API_ERROR', message },
+    EPISODE_COMPLETED: { status: 'error', message: t('error.unexpectedSync') },
+    ADJUST_PROGRESS: { status: 'error', message },
+    RETRY_QUEUED: { status: 'error', message },
+    SEARCH_ANIME: { ok: false, code: 'API_ERROR', message },
+    RESOLVE_REVIEW: { status: 'error', message: t('error.unexpectedSync') },
+    REOPEN_REVIEW: { ok: false, code: 'API_ERROR', message },
+    GET_WATCHING: { ok: false, code: 'API_ERROR', message },
+    RATE_MEDIA: { status: 'error', message: t('error.unexpectedRating') },
+    DEFER_RATING: { ok: false, code: 'API_ERROR', message },
+    START_REWATCH: { status: 'error', message: t('error.unexpectedRewatch') },
+    DECLINE_REWATCH: { ok: false, code: 'API_ERROR', message },
+    CHECK_AIRING: { checkedAt: 0, notified: 0, skipped: null, error: message },
+  };
+}
 
 type MessageHandlers = {
   [K in MessageType]: (payload: MessagePayload<K>, sender: chrome.runtime.MessageSender) => Promise<MessageResponse<K>>;
@@ -111,11 +123,12 @@ chrome.runtime.onMessage.addListener(
       return false;
     }
 
-    dispatch(message, sender)
+    i18nReady
+      .then(() => dispatch(message, sender))
       .then(sendResponse)
       .catch((error: unknown) => {
         console.error('[SyncKai] Erreur non gérée pour', message.type, error);
-        sendResponse(UNEXPECTED_ERRORS[message.type]);
+        sendResponse(unexpectedErrors()[message.type]);
       });
     return true; // Garde le canal ouvert pour la réponse asynchrone
   },
@@ -124,7 +137,7 @@ chrome.runtime.onMessage.addListener(
 // ─── File de relance et raccourci clavier ─────────────────────────────────
 
 chrome.alarms.onAlarm.addListener((alarm): void => {
-  if (alarm.name === QUEUE_ALARM) void processSyncQueue();
+  if (alarm.name === QUEUE_ALARM) afterI18n(processSyncQueue);
 });
 
 chrome.commands.onCommand.addListener((command): void => {
@@ -141,7 +154,7 @@ chrome.runtime.onInstalled.addListener((): void => {
 // ─── Alertes de nouveaux épisodes ──────────────────────────────────────────
 
 chrome.alarms.onAlarm.addListener((alarm): void => {
-  if (alarm.name === AIRING_ALARM) void checkNewEpisodes();
+  if (alarm.name === AIRING_ALARM) afterI18n(checkNewEpisodes);
 });
 chrome.notifications.onClicked.addListener((id): void => {
   void handleNotificationClick(id);

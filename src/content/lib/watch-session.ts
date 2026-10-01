@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import type { EpisodeInfo } from '../../shared/episode.types';
 import { isExcluded, platformSeriesKey } from '../../shared/exclusions';
 import { sendMessage } from '../../shared/messages';
@@ -40,7 +41,7 @@ function formatEpisode(e: EpisodeInfo): string {
 /** "One Piece · épisode 1180" pour le toast */
 function formatEpisodeShort(e: EpisodeInfo): string {
   const number = e.displayedEpisodeNumber ?? e.seasonEpisodeNumber;
-  return number !== null ? `${e.animeTitle} · épisode ${number}` : e.animeTitle;
+  return number !== null ? t('content.episodeShort', { title: e.animeTitle, number }) : e.animeTitle;
 }
 
 export interface WatchSession {
@@ -83,7 +84,7 @@ export function startWatchSession(adapter: StreamingAdapter, episodeId: string):
 
     if (isExtensionContextInvalidated()) {
       log.warn('Extension rechargée depuis l’ouverture de la page : recharge l’onglet pour réactiver SyncKai');
-      showToast({ tone: 'warning', title: 'SyncKai a été mis à jour', message: 'Recharge la page pour synchroniser cet épisode.' }, { autoHideMs: ALERT_TOAST_MS });
+      showToast({ tone: 'warning', title: t('content.updated.title'), message: t('content.updated.message') }, { autoHideMs: ALERT_TOAST_MS });
       destroy();
       return;
     }
@@ -92,7 +93,7 @@ export function startWatchSession(adapter: StreamingAdapter, episodeId: string):
     const episode = extract() ?? metadata;
     if (!episode) {
       log.error('Épisode terminé mais métadonnées introuvables : complétion non envoyée');
-      showToast({ tone: 'error', title: 'Épisode non identifié', message: 'Impossible de lire les informations de l’épisode sur la page.' }, { autoHideMs: ALERT_TOAST_MS });
+      showToast({ tone: 'error', title: t('content.unidentified.title'), message: t('content.unidentified.message') }, { autoHideMs: ALERT_TOAST_MS });
       return;
     }
 
@@ -139,7 +140,7 @@ export function startWatchSession(adapter: StreamingAdapter, episodeId: string):
    */
   async function syncWithFeedback(episode: EpisodeInfo, level: NotificationLevel, services: TrackerId[] | null = null): Promise<void> {
     const toast = showsProgress(level)
-      ? showToast({ tone: 'info', title: 'Synchronisation…', message: formatEpisodeShort(episode) })
+      ? showToast({ tone: 'info', title: t('common.syncing'), message: formatEpisodeShort(episode) })
       : null;
     const notify = (content: ToastContent, options: ToastOptions): void => {
       if (toast) toast.update(content, options);
@@ -153,7 +154,7 @@ export function startWatchSession(adapter: StreamingAdapter, episodeId: string):
       const retry = outcome.status === 'error' ? null : failedServices(outcome);
       if (retry === null || retry.length > 0) {
         // Nouvelle tentative explicite : mode détaillé forcé pour voir la progression et le résultat
-        const action = { label: 'Réessayer', onClick: () => void syncWithFeedback(episode, 'detailed', retry) };
+        const action = { label: t('common.retry'), onClick: () => void syncWithFeedback(episode, 'detailed', retry) };
         notify({ ...bubbleForOutcome(outcome), action }, { variant: 'bubble', autoHideMs: RETRY_TOAST_MS });
         return;
       }
@@ -174,7 +175,7 @@ export function startWatchSession(adapter: StreamingAdapter, episodeId: string):
     } catch (error: unknown) {
       completionReported = false;
       log.error('Service worker injoignable :', error);
-      notify({ tone: 'error', title: 'SyncKai injoignable', message: 'Recharge la page puis réessaie.' }, { variant: 'bubble', autoHideMs: ALERT_TOAST_MS });
+      notify({ tone: 'error', title: t('content.unreachable.title'), message: t('content.unreachable.message') }, { variant: 'bubble', autoHideMs: ALERT_TOAST_MS });
     }
   }
 

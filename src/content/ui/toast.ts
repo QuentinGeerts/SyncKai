@@ -1,3 +1,5 @@
+import { t } from '../../i18n';
+
 export type ToastTone = 'info' | 'success' | 'warning' | 'error';
 /** bubble : bulle complète (Mochi, titre, détail, action) ; pill : pastille compacte de succès */
 export type ToastVariant = 'bubble' | 'pill';
@@ -231,7 +233,7 @@ function renderBubble(toast: HTMLElement, content: ToastContent, onClose: () => 
 
   const close = el('button', 'close');
   close.type = 'button';
-  close.setAttribute('aria-label', 'Fermer');
+  close.setAttribute('aria-label', t('common.close'));
   close.append(closeIcon());
   close.onclick = onClose;
 

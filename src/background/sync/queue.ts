@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import { refreshReviewBadge } from '../../shared/badge';
 import type { EpisodeInfo } from '../../shared/episode.types';
 import { queueItemId, type SyncQueueItem } from '../../shared/queue.types';
@@ -135,10 +136,10 @@ export async function processSyncQueue(): Promise<void> {
 export async function retryQueued(id: string): Promise<SyncOutcome> {
   let outcome: SyncOutcome;
   try {
-    outcome = (await retryItem(id, true)) ?? { status: 'error', message: 'Cette synchro n’existe plus.' };
+    outcome = (await retryItem(id, true)) ?? { status: 'error', message: t('queue.gone') };
   } catch (error: unknown) {
     console.error(LOG_PREFIX, 'Réessai impossible :', id, error);
-    outcome = { status: 'error', message: 'La nouvelle tentative a échoué. Réessaie plus tard.' };
+    outcome = { status: 'error', message: t('queue.retryFailed') };
   }
   try {
     await scheduleAlarm();

@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { anilistPublicQuery } from './api/client';
 import {
   AIRING_NOTIFICATION_PREFIX,
@@ -118,7 +119,7 @@ async function fetchAiring(ids: number[], from: number, to: number): Promise<Air
 
 /** Message d'erreur court et lisible pour le popup */
 function describeError(error: unknown): string {
-  const message = error instanceof Error && error.message ? error.message : 'Erreur inconnue';
+  const message = error instanceof Error && error.message ? error.message : t('airing.unknownError');
   return message.length > 160 ? `${message.slice(0, 157)}…` : message;
 }
 
@@ -172,7 +173,7 @@ async function runCheck(): Promise<{ notified: number; skipped: AiringSkipReason
       iconUrl,
       title: notification.title,
       message: notification.message,
-      buttons: [{ title: 'Ouvrir' }],
+      buttons: [{ title: t('common.open') }],
       priority: 0,
     });
   }

@@ -1,3 +1,4 @@
+import { t, tp, type MessageKey } from '../../i18n';
 import type { StreamingPlatform } from '../../shared/episode.types';
 import { TRACKER_LABELS, type TrackerId } from '../../shared/tracker.types';
 import { choosePlatformLink, formatRelativeTime, nextEpisodeBadge, pickHeroEntry, sortWatchingBy } from '../../shared/watching';
@@ -55,7 +56,7 @@ function progressPercent(entry: WatchingEntry): number | null {
 }
 
 function progressLabel(entry: WatchingEntry): string {
-  return entry.totalEpisodes !== null ? `${entry.progress} / ${entry.totalEpisodes}` : `ép. ${entry.progress}`;
+  return entry.totalEpisodes !== null ? `${entry.progress} / ${entry.totalEpisodes}` : t('watching.epShort', { progress: entry.progress });
 }
 
 /** Plateforme affichée en pastille : celle du lien « Ouvrir », sinon la dernière utilisée */
@@ -85,8 +86,8 @@ function renderPlusOne(entry: WatchingEntry, controls: EntryControls, bgClass: s
       class: `${ICON_BTN} ${bgClass} text-[12px] font-extrabold text-mint tabular-nums`,
       attrs: {
         type: 'button',
-        'aria-label': `Marquer l’épisode suivant comme vu : ${entry.title}`,
-        title: atEnd ? 'Tous les épisodes sont déjà vus' : 'Épisode suivant vu',
+        'aria-label': t('watching.plusOneAria', { title: entry.title }),
+        title: atEnd ? t('watching.allWatched') : t('watching.nextWatched'),
         'data-focus': `plus-${entryKey(entry)}`,
         ...(pending ? { 'aria-busy': 'true' } : {}),
         ...(pending || atEnd ? { disabled: '' } : {}),
@@ -126,19 +127,19 @@ function renderRowMenu(entry: WatchingEntry, controls: EntryControls): HTMLEleme
     'div',
     {
       class: 'absolute top-full right-0 z-30 mt-1 flex w-max max-w-[240px] min-w-[200px] flex-col gap-0.5 rounded-card border border-line bg-surface p-1 shadow-pop',
-      attrs: { id: rowMenuId(key), role: 'menu', 'aria-label': `Actions : ${entry.title}` },
+      attrs: { id: rowMenuId(key), role: 'menu', 'aria-label': t('watching.menuAria', { title: entry.title }) },
       on: { keydown: (event) => onMenuKeyDown(menu, event, close) },
     },
-    item('minus', '−1 épisode', icon('minus', 'h-3.5 w-3.5 text-muted', '2.6'), () => {
+    item('minus', t('watching.minusOne'), icon('minus', 'h-3.5 w-3.5 text-muted', '2.6'), () => {
       close();
       controls.onAdjust(entry, -1);
     }, pending || entry.progress <= 0),
     excluded
-      ? item('include', 'Réactiver la synchro', icon('retry', 'h-3.5 w-3.5 text-mint'), () => {
+      ? item('include', t('watching.resumeSync'), icon('retry', 'h-3.5 w-3.5 text-mint'), () => {
           close();
           controls.onInclude(entry);
         })
-      : item('exclude', 'Ne plus synchroniser cette série', icon('ban', 'h-3.5 w-3.5'), () => {
+      : item('exclude', t('common.stopSyncSeries'), icon('ban', 'h-3.5 w-3.5'), () => {
           close();
           controls.onExclude(entry);
         }, entry.mediaId === null, true),
@@ -150,7 +151,7 @@ function renderRowMenu(entry: WatchingEntry, controls: EntryControls): HTMLEleme
         on: { click: close },
       },
       icon('external', 'h-3.5 w-3.5 text-muted'),
-      'Ouvrir la fiche',
+      t('watching.openEntry'),
     ),
   );
   return menu;
@@ -169,7 +170,7 @@ function renderRowMenuControl(entry: WatchingEntry, controls: EntryControls, bgC
         'aria-haspopup': 'menu',
         'aria-expanded': String(open),
         'aria-controls': rowMenuId(key),
-        'aria-label': `Plus d’actions : ${entry.title}`,
+        'aria-label': t('watching.moreActions', { title: entry.title }),
         'data-focus': `more-${key}`,
       },
       on: {
@@ -205,9 +206,9 @@ function feedbackChip(controls: EntryControls, entry: WatchingEntry): HTMLElemen
 function excludedChip(): HTMLElement {
   return h(
     'span',
-    { class: 'inline-flex h-[18px] shrink-0 items-center gap-1 rounded-full border border-line px-2 text-[11px] leading-4 font-bold text-muted', attrs: { title: 'Série exclue de la synchronisation' } },
+    { class: 'inline-flex h-[18px] shrink-0 items-center gap-1 rounded-full border border-line px-2 text-[11px] leading-4 font-bold text-muted', attrs: { title: t('common.excludedTitle') } },
     icon('ban', 'h-2.5 w-2.5', '2.6'),
-    'Exclue',
+    t('common.excluded'),
   );
 }
 
@@ -232,7 +233,7 @@ function renderHero(entry: WatchingEntry, now: number, preferred: StreamingPlatf
 
   return h(
     'section',
-    { class: 'flex shrink-0 gap-3 rounded-card bg-raised p-3 shadow-pop', attrs: { 'aria-label': 'Reprendre' } },
+    { class: 'flex shrink-0 gap-3 rounded-card bg-raised p-3 shadow-pop', attrs: { 'aria-label': t('watching.resume') } },
     renderCover(entry.title, entry.coverUrl, 'h-[78px] w-14', 'text-[16px]', platform && platformChip(platform, 'right-[3px] bottom-[3px]')),
     h(
       'div',
@@ -240,7 +241,7 @@ function renderHero(entry: WatchingEntry, now: number, preferred: StreamingPlatf
       h(
         'div',
         { class: 'flex items-center justify-between gap-2' },
-        h('div', { class: 'flex min-w-0 flex-col' }, kanaLabel('ツヅキ', 'text-sakura'), h('span', { class: 'text-[11px] font-semibold text-muted' }, 'Reprendre')),
+        h('div', { class: 'flex min-w-0 flex-col' }, kanaLabel('ツヅキ', 'text-sakura'), h('span', { class: 'text-[11px] font-semibold text-muted' }, t('watching.resume'))),
         link &&
           h(
             'a',
@@ -250,7 +251,7 @@ function renderHero(entry: WatchingEntry, now: number, preferred: StreamingPlatf
                 href: link.url,
                 target: '_blank',
                 rel: 'noopener noreferrer',
-                'aria-label': `Ouvrir ${entry.title} sur ${PLATFORM_LABELS[link.platform]}`,
+                'aria-label': t('watching.openOnAria', { title: entry.title, platform: PLATFORM_LABELS[link.platform] }),
               },
             },
             h(
@@ -260,7 +261,7 @@ function renderHero(entry: WatchingEntry, now: number, preferred: StreamingPlatf
                   'inline-flex h-7 items-center gap-1.5 rounded-full border border-line px-2.5 text-[11px] font-bold text-sakura transition-colors group-hover:border-sakura group-hover:bg-surface',
               },
               playIcon('h-3 w-3'),
-              `Ouvrir sur ${PLATFORM_LABELS[link.platform]}`,
+              t('watching.openOn', { platform: PLATFORM_LABELS[link.platform] }),
             ),
           ),
       ),
@@ -280,7 +281,13 @@ function renderHero(entry: WatchingEntry, now: number, preferred: StreamingPlatf
           h(
             'span',
             { class: 'min-w-0 flex-1 truncate text-[11px] font-semibold text-muted' },
-            h('span', { class: 'font-bold text-ink tabular-nums' }, entry.totalEpisodes !== null ? `Ép. ${entry.progress} / ${entry.totalEpisodes}` : `Ép. ${entry.progress}`),
+            h(
+              'span',
+              { class: 'font-bold text-ink tabular-nums' },
+              entry.totalEpisodes !== null
+                ? t('watching.heroProgress', { progress: entry.progress, total: entry.totalEpisodes })
+                : t('watching.heroProgressNoTotal', { progress: entry.progress }),
+            ),
             meta.length > 0 && ` · ${meta.join(' · ')}`,
           ),
         feedback && h('span', { class: 'flex-1' }),
@@ -324,7 +331,13 @@ function renderRow(entry: WatchingEntry, now: number, preferred: StreamingPlatfo
     ),
     h(
       'span',
-      { class: 'shrink-0 text-right text-[11px] font-bold tabular-nums', attrs: { 'aria-label': `${entry.progress} épisode${entry.progress > 1 ? 's' : ''} vu${entry.progress > 1 ? 's' : ''}${entry.totalEpisodes !== null ? ` sur ${entry.totalEpisodes}` : ''}` } },
+      {
+        class: 'shrink-0 text-right text-[11px] font-bold tabular-nums',
+        attrs: {
+          'aria-label':
+            entry.totalEpisodes !== null ? tp('watching.seenOf', entry.progress, { total: entry.totalEpisodes }) : tp('watching.seen', entry.progress),
+        },
+      },
       progressLabel(entry),
     ),
     link &&
@@ -336,8 +349,8 @@ function renderRow(entry: WatchingEntry, now: number, preferred: StreamingPlatfo
             href: link.url,
             target: '_blank',
             rel: 'noopener noreferrer',
-            title: 'Ouvrir',
-            'aria-label': `Ouvrir ${entry.title} sur ${PLATFORM_LABELS[link.platform]}`,
+            title: t('common.open'),
+            'aria-label': t('watching.openOnAria', { title: entry.title, platform: PLATFORM_LABELS[link.platform] }),
           },
         },
         icon('screen', 'h-4 w-4'),
@@ -360,19 +373,19 @@ function renderRow(entry: WatchingEntry, now: number, preferred: StreamingPlatfo
 
 // ─── Tri « Mes séries » ───────────────────────────────────────────────────
 
-const SORT_LABELS: Record<WatchingSort, string> = {
-  'next-episode': 'Prochaine sortie',
-  recent: 'Dernière mise à jour',
-  title: 'Titre (A → Z)',
-  remaining: 'Épisodes restants',
+const SORT_LABELS: Record<WatchingSort, MessageKey> = {
+  'next-episode': 'watching.sort.nextEpisode',
+  recent: 'watching.sort.recent',
+  title: 'watching.sort.title',
+  remaining: 'watching.sort.remaining',
 };
 
 /** Fin de l'aria-label de la liste (« Mes séries AniList, triées … ») */
-const SORT_ARIA: Record<WatchingSort, string> = {
-  'next-episode': 'par prochaine sortie',
-  recent: 'par dernière mise à jour',
-  title: 'par titre',
-  remaining: 'par épisodes restants',
+const SORT_ARIA: Record<WatchingSort, MessageKey> = {
+  'next-episode': 'watching.sortAria.nextEpisode',
+  recent: 'watching.sortAria.recent',
+  title: 'watching.sortAria.title',
+  remaining: 'watching.sortAria.remaining',
 };
 
 const SORT_MENU_ID = 'sk-sort-menu';
@@ -403,7 +416,7 @@ function renderSortMenu(sort: WatchingSort, onClose: () => void, onPick: (sort: 
     'div',
     {
       class: 'absolute top-full right-0 z-30 mt-1 flex w-max max-w-[200px] min-w-[176px] flex-col gap-0.5 rounded-card border border-line bg-surface p-1 shadow-pop',
-      attrs: { id: SORT_MENU_ID, role: 'menu', 'aria-label': 'Trier mes séries' },
+      attrs: { id: SORT_MENU_ID, role: 'menu', 'aria-label': t('watching.sortMenu') },
       on: { keydown: (event) => onMenuKeyDown(menu, event, onClose) },
     },
     ...WATCHING_SORTS.map((value) => {
@@ -416,7 +429,7 @@ function renderSortMenu(sort: WatchingSort, onClose: () => void, onPick: (sort: 
           on: { click: () => onPick(value) },
         },
         checked ? icon('check', 'h-3.5 w-3.5 shrink-0 text-sakura', '2.6') : h('span', { class: 'h-3.5 w-3.5 shrink-0', attrs: { 'aria-hidden': 'true' } }),
-        SORT_LABELS[value],
+        t(SORT_LABELS[value]),
       );
     }),
   );
@@ -434,7 +447,7 @@ function renderSortControl(sort: WatchingSort, open: boolean, onSortMenu: (open:
         'aria-haspopup': 'menu',
         'aria-expanded': String(open),
         'aria-controls': SORT_MENU_ID,
-        'aria-label': `Trier : ${SORT_LABELS[sort]}`,
+        'aria-label': t('watching.sortTrigger', { label: t(SORT_LABELS[sort]) }),
         'data-focus': 'sort-trigger',
       },
       on: {
@@ -449,7 +462,7 @@ function renderSortControl(sort: WatchingSort, open: boolean, onSortMenu: (open:
       },
     },
     icon('sortNext', 'h-3 w-3', '2.4'),
-    SORT_LABELS[sort],
+    t(SORT_LABELS[sort]),
   );
   return h(
     'div',
@@ -468,7 +481,7 @@ function renderSkeleton(): HTMLElement {
     );
   return h(
     'div',
-    { class: 'flex flex-col gap-3 motion-safe:animate-pulse', attrs: { 'aria-busy': 'true', 'aria-label': 'Chargement de tes séries en cours' } },
+    { class: 'flex flex-col gap-3 motion-safe:animate-pulse', attrs: { 'aria-busy': 'true', 'aria-label': t('watching.loading') } },
     h('div', { class: 'flex h-[102px] gap-3 rounded-card bg-raised p-3' }, h('div', { class: 'h-[78px] w-14 rounded-lg bg-surface' }), h('div', { class: 'flex flex-1 flex-col gap-2 pt-4' }, h('div', { class: 'h-3.5 w-32 rounded bg-surface' }), h('div', { class: 'h-2 w-full rounded-full bg-surface' }))),
     h('ul', { class: 'm-0 flex list-none flex-col gap-1 p-0' }, row(), row(), row(), row()),
   );
@@ -476,6 +489,8 @@ function renderSkeleton(): HTMLElement {
 
 function renderEmpty(): HTMLElement {
   const pill = 'inline-flex h-9 items-center rounded-full px-4 text-[13px] font-bold transition';
+  // Chemin « Réglages › Lecture » mis en gras au milieu de la phrase traduite
+  const [tipBefore = '', tipAfter = ''] = t('watching.tip').split('{path}');
   return h(
     'div',
     { class: 'flex min-h-full flex-col gap-4 pb-1' },
@@ -483,20 +498,20 @@ function renderEmpty(): HTMLElement {
       'section',
       { class: 'flex flex-1 flex-col items-center justify-center gap-2 text-center', attrs: { 'aria-labelledby': 'sk-empty-title' } },
       mochi('h-12 w-12', 'sleeping'),
-      h('h2', { class: 'm-0 mt-1 text-[15px] leading-5 font-bold', attrs: { id: 'sk-empty-title' } }, 'Rien en cours pour l’instant'),
-      h('p', { class: 'm-0 max-w-[300px] text-[12px] leading-[18px] font-semibold text-muted' }, 'Lance un épisode sur Crunchyroll ou ADN : il apparaîtra ici avec la date du prochain épisode.'),
+      h('h2', { class: 'm-0 mt-1 text-[15px] leading-5 font-bold', attrs: { id: 'sk-empty-title' } }, t('watching.empty.title')),
+      h('p', { class: 'm-0 max-w-[300px] text-[12px] leading-[18px] font-semibold text-muted' }, t('watching.empty.text')),
       h(
         'div',
         { class: 'mt-2 flex gap-2' },
-        h('a', { class: `${pill} bg-sakura text-on-fill shadow-pop motion-safe:hover:-translate-px`, attrs: { href: 'https://www.crunchyroll.com', target: '_blank', rel: 'noopener noreferrer' } }, 'Ouvrir Crunchyroll'),
-        h('a', { class: `${pill} border border-line text-ink hover:bg-surface`, attrs: { href: 'https://animationdigitalnetwork.com', target: '_blank', rel: 'noopener noreferrer' } }, 'Ouvrir ADN'),
+        h('a', { class: `${pill} bg-sakura text-on-fill shadow-pop motion-safe:hover:-translate-px`, attrs: { href: 'https://www.crunchyroll.com', target: '_blank', rel: 'noopener noreferrer' } }, t('watching.openPlatform', { platform: 'Crunchyroll' })),
+        h('a', { class: `${pill} border border-line text-ink hover:bg-surface`, attrs: { href: 'https://animationdigitalnetwork.com', target: '_blank', rel: 'noopener noreferrer' } }, t('watching.openPlatform', { platform: 'ADN' })),
       ),
     ),
     h(
       'aside',
-      { class: `${CARD} flex shrink-0 flex-col gap-1 p-3`, attrs: { 'aria-label': 'Astuce' } },
-      h('div', { class: 'flex items-baseline gap-1.5' }, kanaLabel('ヒント', 'text-butter'), h('span', { class: 'text-[11px] font-bold' }, 'Astuce')),
-      h('p', { class: 'm-0 text-[12px] leading-[17px] font-semibold text-muted' }, 'Tu peux choisir ton lecteur préféré dans ', h('span', { class: 'font-bold text-ink' }, 'Réglages › Lecture'), '.'),
+      { class: `${CARD} flex shrink-0 flex-col gap-1 p-3`, attrs: { 'aria-label': t('watching.tipTitle') } },
+      h('div', { class: 'flex items-baseline gap-1.5' }, kanaLabel('ヒント', 'text-butter'), h('span', { class: 'text-[11px] font-bold' }, t('watching.tipTitle'))),
+      h('p', { class: 'm-0 text-[12px] leading-[17px] font-semibold text-muted' }, tipBefore, h('span', { class: 'font-bold text-ink' }, t('watching.tipPath')), tipAfter),
     ),
   );
 }
@@ -515,7 +530,7 @@ export function renderWatchingScreen(props: WatchingScreenProps): HTMLElement {
       options: SOURCE_OPTIONS,
       current: state.service,
       onPick: props.onPickSource,
-      attrs: { 'aria-label': 'Source de la liste' },
+      attrs: { 'aria-label': t('watching.source') },
       focusKey: 'source',
       activeClass: 'bg-lavender',
     });
@@ -527,12 +542,12 @@ export function renderWatchingScreen(props: WatchingScreenProps): HTMLElement {
     return h(
       'div',
       { class: 'flex flex-col gap-3' },
-      ...nodes([switchRow(), renderAlert({ message: state.message, action: { label: 'Réessayer', onClick: props.onRetry } })]),
+      ...nodes([switchRow(), renderAlert({ message: state.message, action: { label: t('common.retry'), onClick: props.onRetry } })]),
     );
   }
 
   const { list } = state;
-  const errorAlert = state.error && renderAlert({ message: state.error, action: { label: 'Réessayer', onClick: props.onRetry } });
+  const errorAlert = state.error && renderAlert({ message: state.error, action: { label: t('common.retry'), onClick: props.onRetry } });
 
   if (list.entries.length === 0) {
     return h(
@@ -555,7 +570,7 @@ export function renderWatchingScreen(props: WatchingScreenProps): HTMLElement {
       h(
         'div',
         { class: 'flex shrink-0 items-center justify-between gap-2' },
-        sectionTitle('Mes séries'),
+        sectionTitle(t('watching.mySeries')),
         h(
           'div',
           { class: 'flex items-center gap-2' },
@@ -567,11 +582,11 @@ export function renderWatchingScreen(props: WatchingScreenProps): HTMLElement {
             'ul',
             {
               class: 'm-0 flex list-none flex-col gap-1 p-0',
-              attrs: { 'aria-label': `Mes séries ${TRACKER_LABELS[state.service]}, triées ${SORT_ARIA[props.sort]}` },
+              attrs: { 'aria-label': t('watching.listAria', { service: TRACKER_LABELS[state.service], sort: t(SORT_ARIA[props.sort]) }) },
             },
             ...rows.map((entry) => renderRow(entry, now, preferredPlayer, props.controls)),
           )
-        : h('p', { class: `${CARD} m-0 p-3 text-[12px] text-muted` }, 'Aucune autre série en cours.'),
+        : h('p', { class: `${CARD} m-0 p-3 text-[12px] text-muted` }, t('watching.noOther')),
     ]),
   );
 }

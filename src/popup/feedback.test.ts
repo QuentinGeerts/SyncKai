@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { ratingFeedback } from './feedback';
+import { setLocale } from '../i18n';
+
+// Textes attendus en français
+setLocale('fr');
 
 describe('ratingFeedback', () => {
   it('succès sur tous les services', () => {

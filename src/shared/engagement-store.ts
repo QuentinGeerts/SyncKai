@@ -9,7 +9,7 @@ export const PENDING_RATINGS_KEY = 'pendingRatings';
 export const REWATCH_DECLINED_KEY = 'rewatchDeclined';
 
 /** Cartes « À noter » conservées au maximum (les plus anciennes sont abandonnées) */
-const MAX_PENDING_RATINGS = 30;
+export const MAX_PENDING_RATINGS = 30;
 
 export function isPendingRating(value: unknown): value is PendingRating {
   return (

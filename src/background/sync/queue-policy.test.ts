@@ -15,6 +15,10 @@ import {
   upsertFailure,
   withoutServices,
 } from './queue-policy';
+import { setLocale } from '../../i18n';
+
+// Textes attendus en français
+setLocale('fr');
 
 const MIN = 60_000;
 const NOW = 1_800_000_000_000;

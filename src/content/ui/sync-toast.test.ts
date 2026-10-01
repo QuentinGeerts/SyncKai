@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { SyncOutcome } from '../../shared/sync.types';
 import { ALERT_TOAST_MS, PILL_TOAST_MS, SUCCESS_TOAST_MS, engagementResultToast, pillForOutcome, toastForOutcome } from './sync-toast';
+import { setLocale } from '../../i18n';
+
+// Textes attendus en français
+setLocale('fr');
 
 const synced: SyncOutcome = {
   status: 'synced',

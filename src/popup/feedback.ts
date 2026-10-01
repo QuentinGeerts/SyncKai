@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { describeOutcome, type FeedbackTone } from '../shared/sync-feedback';
 import type { SyncOutcome } from '../shared/sync.types';
 import { TRACKER_LABELS } from '../shared/tracker.types';
@@ -25,19 +26,19 @@ export function adjustFeedback(outcome: SyncOutcome, delta: 1 | -1): InlineFeedb
       const failed = outcome.results.filter((r) => r.outcome.status === 'error').map((r) => TRACKER_LABELS[r.service]);
       const progress = written[0];
       if (progress === undefined) {
-        return { tone: failed.length > 0 ? 'error' : 'warning', text: failed.length > 0 ? 'Échec de la mise à jour' : 'Rien n’a été modifié', detail };
+        return { tone: failed.length > 0 ? 'error' : 'warning', text: failed.length > 0 ? t('inline.updateFailed') : t('inline.nothingChanged'), detail };
       }
-      const text = delta === 1 ? `Ép. ${progress} vu` : `Retour à l’ép. ${progress}`;
+      const text = t(delta === 1 ? 'inline.watched' : 'inline.backTo', { progress });
       // Succès partiel : le service en échec est nommé (relance automatique éventuelle dans le détail)
-      if (failed.length > 0) return { tone: 'warning', text: `${text} · échec ${failed.join(', ')}`, detail };
+      if (failed.length > 0) return { tone: 'warning', text: t('inline.partial', { text, services: failed.join(', ') }), detail };
       return { tone: 'success', text, detail };
     }
     case 'excluded':
-      return { tone: 'info', text: 'Série exclue', detail };
+      return { tone: 'info', text: t('inline.excluded'), detail };
     case 'not-connected':
-      return { tone: 'warning', text: 'Aucun compte connecté', detail };
+      return { tone: 'warning', text: t('feedback.notConnected.title'), detail };
     case 'needs-review':
-      return { tone: 'warning', text: 'À vérifier', detail };
+      return { tone: 'warning', text: t('inline.toCheck'), detail };
     case 'error':
       return { tone: 'error', text: outcome.message, detail };
   }
@@ -46,7 +47,7 @@ export function adjustFeedback(outcome: SyncOutcome, delta: 1 | -1): InlineFeedb
 /** Résultat d'un « Réessayer » de la file : phrase complète (affichée en bandeau) */
 export function retryFeedback(outcome: SyncOutcome): InlineFeedback {
   const { tone, title, message } = describeOutcome(outcome);
-  return { tone, text: message ? `${title} : ${message}` : title, detail: detailOf(outcome) };
+  return { tone, text: message ? t('common.serviceMessage', { service: title, message }) : title, detail: detailOf(outcome) };
 }
 
 export function errorFeedback(text: string): InlineFeedback {
@@ -62,9 +63,9 @@ export function ratingFeedback(outcome: SyncOutcome, stars: string, title: strin
   if (outcome.status === 'synced') {
     const failed = outcome.results.filter((r) => r.outcome.status === 'error').map((r) => TRACKER_LABELS[r.service]);
     const written = outcome.results.some((r) => r.outcome.status === 'updated' || r.outcome.status === 'up-to-date');
-    if (failed.length === 0 && written) return { ok: true, tone: 'success', text: `Note ${stars}/10 enregistrée · ${title}`, detail };
-    if (failed.length > 0) return { ok: false, tone: 'error', text: `Échec sur ${failed.join(', ')}, réessaie`, detail };
-    return { ok: false, tone: 'warning', text: 'Rien n’a été enregistré', detail };
+    if (failed.length === 0 && written) return { ok: true, tone: 'success', text: t('inline.ratingSaved', { stars, title }), detail };
+    if (failed.length > 0) return { ok: false, tone: 'error', text: t('inline.ratingFailedOn', { services: failed.join(', ') }), detail };
+    return { ok: false, tone: 'warning', text: t('inline.nothingSaved'), detail };
   }
   if (outcome.status === 'error') return { ok: false, tone: 'error', text: outcome.message, detail };
   return { ok: false, tone: 'warning', text: describeOutcome(outcome).title, detail };

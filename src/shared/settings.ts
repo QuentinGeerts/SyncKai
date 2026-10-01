@@ -13,6 +13,10 @@ export type CompletionTrigger = 'credits' | 'percentage';
  */
 export type NotificationLevel = 'discreet' | 'detailed' | 'alerts-only';
 
+/** Langue de l'interface : 'auto' suit la langue du navigateur (fr, de, en ; anglais sinon) */
+export type LanguageSetting = 'auto' | 'fr' | 'en' | 'de';
+export const LANGUAGE_SETTINGS: readonly LanguageSetting[] = ['auto', 'fr', 'en', 'de'];
+
 export interface SyncSettings {
   /** Synchronisation automatique active (false = pause) */
   autoSync: boolean;
@@ -29,6 +33,7 @@ export interface SyncSettings {
   airingAlerts: boolean;
   /** Délai après la diffusion japonaise avant de notifier */
   airingDelayHours: AiringDelayHours;
+  language: LanguageSetting;
 }
 
 export const DEFAULT_SETTINGS: SyncSettings = {
@@ -40,6 +45,7 @@ export const DEFAULT_SETTINGS: SyncSettings = {
   ratingPrompt: true,
   airingAlerts: true,
   airingDelayHours: 0,
+  language: 'auto',
 };
 
 export const PERCENTAGE_RANGE = { min: 70, max: 98 } as const;
@@ -75,6 +81,7 @@ export function normalizeSettings(raw: unknown): SyncSettings {
     ratingPrompt: typeof value.ratingPrompt === 'boolean' ? value.ratingPrompt : DEFAULT_SETTINGS.ratingPrompt,
     airingAlerts: typeof value.airingAlerts === 'boolean' ? value.airingAlerts : DEFAULT_SETTINGS.airingAlerts,
     airingDelayHours: AIRING_DELAYS.find((d) => d === value.airingDelayHours) ?? DEFAULT_SETTINGS.airingDelayHours,
+    language: LANGUAGE_SETTINGS.find((l) => l === value.language) ?? DEFAULT_SETTINGS.language,
   };
 }
 

@@ -1,3 +1,4 @@
+import { initI18n, onLocaleChange, t } from '../i18n';
 import { AIRING_RESULT_KEY, isAiringCheckResult, type AiringCheckResult } from '../shared/airing.types';
 import { isAniListViewer, type ViewerErrorCode, type ViewerResult } from '../shared/anilist.types';
 import { isAniListToken, type AuthResult } from '../shared/auth.types';
@@ -61,7 +62,12 @@ import {
   type WatchingState,
 } from './state';
 
-const SW_UNREACHABLE = 'Impossible de contacter l’extension. Réessaie.';
+// Langue lue avant le premier rendu : toutes les vues sont construites directement dans la bonne langue
+await initI18n();
+
+const swUnreachable = (): string => t('popup.swUnreachable');
+/** Écran (et défilement) à rouvrir après le rechargement provoqué par un changement de langue */
+const REOPEN_KEY = 'synckai:reopen';
 /** Erreurs qui invalident la session : « Session expirée » + reconnexion */
 const AUTH_ERRORS: ReadonlySet<ViewerErrorCode> = new Set(['NOT_AUTHENTICATED', 'TOKEN_INVALID']);
 const PREFS_KEY = 'popupPrefs';
@@ -75,6 +81,23 @@ interface PopupPrefs {
   sort: WatchingSort;
 }
 
+/** Écran mémorisé avant un changement de langue (lu une seule fois) */
+function takeReopenState(): { screen: Screen; scroll: number } | null {
+  try {
+    const raw = sessionStorage.getItem(REOPEN_KEY);
+    sessionStorage.removeItem(REOPEN_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : null;
+    if (typeof parsed !== 'object' || parsed === null || !('screen' in parsed) || !('scroll' in parsed)) return null;
+    const { screen, scroll } = parsed;
+    const valid = screen === 'watching' || screen === 'activity' || screen === 'settings';
+    return valid && typeof scroll === 'number' ? { screen, scroll } : null;
+  } catch {
+    return null;
+  }
+}
+
+const reopen = takeReopenState();
+
 function getRoot(): HTMLDivElement {
   const el = document.querySelector<HTMLDivElement>('#app');
   if (!el) throw new Error('Élément #app introuvable');
@@ -84,7 +107,7 @@ function getRoot(): HTMLDivElement {
 const anilistStore = createStore<AniListState>({ status: 'loading' });
 const malStore = createStore<MalState>({ status: 'loading' });
 const syncStore = createStore<SyncData>({ reviews: [], recentSyncs: [], busyKey: null, recentError: null });
-const uiStore = createStore<UiState>({ screen: 'watching', previous: 'watching', source: 'anilist', sort: DEFAULT_WATCHING_SORT, sortMenuOpen: false, rowMenu: null });
+const uiStore = createStore<UiState>({ screen: reopen?.screen ?? 'watching', previous: 'watching', source: 'anilist', sort: DEFAULT_WATCHING_SORT, sortMenuOpen: false, rowMenu: null });
 const watchingStore = createStore<WatchingState>({ status: 'idle' });
 const settingsStore = createStore<SettingsState>({ status: 'loading' });
 const entryActionsStore = createStore<ReadonlyMap<string, EntryAction>>(new Map());
@@ -111,7 +134,7 @@ const reviewActions: ReviewActions = {
       return await sendMessage('SEARCH_ANIME', { query });
     } catch (error: unknown) {
       console.error('[SyncKai] Service worker injoignable :', error);
-      return { ok: false, code: 'NETWORK', message: SW_UNREACHABLE };
+      return { ok: false, code: 'NETWORK', message: swUnreachable() };
     }
   },
   async confirm(key, mediaId, progress) {
@@ -119,7 +142,7 @@ const reviewActions: ReviewActions = {
       return await sendMessage('RESOLVE_REVIEW', { key, mediaId, progress });
     } catch (error: unknown) {
       console.error('[SyncKai] Service worker injoignable :', error);
-      return { status: 'error', message: SW_UNREACHABLE };
+      return { status: 'error', message: swUnreachable() };
     }
   },
   // Pas besoin du service worker : simple suppression dans le stockage
@@ -482,7 +505,7 @@ async function refreshAccount(service: TrackerId): Promise<void> {
     result = service === 'anilist' ? await sendMessage('GET_VIEWER', null) : await sendMessage('GET_MAL_VIEWER', null);
   } catch (error: unknown) {
     console.error('[SyncKai] Service worker injoignable :', error);
-    result = { ok: false, code: 'NETWORK', message: SW_UNREACHABLE };
+    result = { ok: false, code: 'NETWORK', message: swUnreachable() };
   }
 
   if (!result.ok && AUTH_ERRORS.has(result.code)) {
@@ -521,7 +544,7 @@ async function login(service: TrackerId): Promise<void> {
     result = await sendMessage(service === 'anilist' ? 'LOGIN_ANILIST' : 'LOGIN_MAL', null);
   } catch (error: unknown) {
     console.error('[SyncKai] Service worker injoignable :', error);
-    result = { ok: false, code: 'UNKNOWN', message: SW_UNREACHABLE };
+    result = { ok: false, code: 'UNKNOWN', message: swUnreachable() };
   }
 
   if (!result.ok) {
@@ -552,7 +575,7 @@ async function logout(service: TrackerId): Promise<void> {
   } catch (error: unknown) {
     console.error(`[SyncKai] Échec de la déconnexion ${TRACKER_LABELS[service]} :`, error);
     const current = store.get();
-    if (current.status === 'logged-in') store.set({ ...current, error: 'Impossible de se déconnecter. Réessaie.' });
+    if (current.status === 'logged-in') store.set({ ...current, error: t('popup.logoutFailed') });
   }
 }
 
@@ -575,7 +598,7 @@ async function bootstrap(service: TrackerId): Promise<void> {
     await refreshAccount(service);
   } catch (error: unknown) {
     console.error('[SyncKai] Lecture du stockage impossible :', error);
-    store.set({ ...LOGGED_OUT, error: 'Impossible de lire la session.' });
+    store.set({ ...LOGGED_OUT, error: t('popup.sessionReadFailed') });
   }
 }
 
@@ -607,7 +630,7 @@ async function loadWatching(service: TrackerId): Promise<void> {
     result = await sendMessage('GET_WATCHING', { service });
   } catch (error: unknown) {
     console.error('[SyncKai] Service worker injoignable :', error);
-    result = { ok: false, code: 'NETWORK', message: SW_UNREACHABLE };
+    result = { ok: false, code: 'NETWORK', message: swUnreachable() };
   }
   if (request !== watchingRequest) return;
 
@@ -689,7 +712,7 @@ async function adjustProgress(entry: WatchingEntry, delta: 1 | -1): Promise<void
     outcome = await sendMessage('ADJUST_PROGRESS', { mediaId: entry.mediaId, malId: entry.malId, delta });
   } catch (error: unknown) {
     console.error('[SyncKai] Service worker injoignable :', error);
-    outcome = { status: 'error', message: SW_UNREACHABLE };
+    outcome = { status: 'error', message: swUnreachable() };
   }
   patchWatchingProgress(entry, outcome);
   flashEntryFeedback(key, adjustFeedback(outcome, delta));
@@ -703,10 +726,10 @@ async function excludeEntry(entry: WatchingEntry): Promise<void> {
   try {
     // Aucune clé plateforme dérivable depuis la liste : l'exclusion porte sur la fiche AniList
     await excludeSeries({ platformKey: null, mediaId: entry.mediaId, label: entry.title });
-    flashEntryFeedback(key, { tone: 'info', text: 'Synchro désactivée', detail: 'Réactivable dans Réglages › Séries exclues' });
+    flashEntryFeedback(key, { tone: 'info', text: t('popup.syncDisabled'), detail: t('popup.syncDisabledDetail') });
   } catch (error: unknown) {
     console.error('[SyncKai] Exclusion de la série impossible :', error);
-    flashEntryFeedback(key, errorFeedback('Exclusion impossible, réessaie'));
+    flashEntryFeedback(key, errorFeedback(t('popup.excludeFailed')));
   }
   await loadExclusions();
 }
@@ -718,10 +741,10 @@ async function includeEntry(entry: WatchingEntry): Promise<void> {
   try {
     const matches = exclusions.items.filter((e) => e.mediaId === entry.mediaId);
     for (const match of matches) await includeSeries(match.id);
-    flashEntryFeedback(key, { tone: 'success', text: 'Synchro réactivée', detail: 'Les prochains épisodes seront de nouveau synchronisés' });
+    flashEntryFeedback(key, { tone: 'success', text: t('popup.syncEnabled'), detail: t('popup.syncEnabledDetail') });
   } catch (error: unknown) {
     console.error('[SyncKai] Réactivation de la série impossible :', error);
-    flashEntryFeedback(key, errorFeedback('Réactivation impossible, réessaie'));
+    flashEntryFeedback(key, errorFeedback(t('popup.includeFailed')));
   }
   await loadExclusions();
 }
@@ -748,7 +771,7 @@ async function excludeRecent(sync: RecentSync): Promise<void> {
     await excludeSeries({ platformKey: platformSeriesKey(sync.episode), mediaId: sync.mediaId, label: sync.episode.animeTitle });
   } catch (e: unknown) {
     console.error('[SyncKai] Exclusion de la série impossible :', e);
-    error = 'La série n’a pas pu être exclue. Réessaie.';
+    error = t('common.excludeFailed');
   }
   syncStore.set({ ...syncStore.get(), recentError: error });
   await loadExclusions();
@@ -789,7 +812,7 @@ async function retryQueued(id: string): Promise<void> {
     outcome = await sendMessage('RETRY_QUEUED', { id });
   } catch (error: unknown) {
     console.error('[SyncKai] Service worker injoignable :', error);
-    outcome = { status: 'error', message: SW_UNREACHABLE };
+    outcome = { status: 'error', message: swUnreachable() };
   }
   setQueueBusy(id, false);
   showQueueNotice(retryFeedback(outcome));
@@ -804,7 +827,7 @@ async function abandonQueued(id: string): Promise<void> {
     await removeQueueItem(id);
   } catch (e: unknown) {
     console.error('[SyncKai] Suppression de la synchro en attente impossible :', e);
-    error = 'La synchro n’a pas pu être abandonnée. Réessaie.';
+    error = t('popup.abandonFailed');
   }
   setQueueBusy(id, false);
   await loadQueue();
@@ -817,7 +840,7 @@ async function loadQueue(): Promise<void> {
     queueStore.set({ ...queueStore.get(), items, error: null });
   } catch (error: unknown) {
     console.error('[SyncKai] Lecture de la file de synchro impossible :', error);
-    queueStore.set({ ...queueStore.get(), error: 'Impossible de lire les synchros en attente.' });
+    queueStore.set({ ...queueStore.get(), error: t('popup.queueReadFailed') });
   }
 }
 
@@ -851,7 +874,7 @@ async function rateMedia(item: PendingRating, value: number): Promise<void> {
     outcome = await sendMessage('RATE_MEDIA', { media: { mediaId: item.mediaId, malId: item.malId, title: item.title }, score: value });
   } catch (error: unknown) {
     console.error('[SyncKai] Service worker injoignable :', error);
-    outcome = { status: 'error', message: SW_UNREACHABLE };
+    outcome = { status: 'error', message: swUnreachable() };
   }
   const feedback = ratingFeedback(outcome, formatStarValue(value), item.title);
   if (!feedback.ok) {
@@ -871,7 +894,7 @@ async function ignoreRating(item: PendingRating): Promise<void> {
     patchRatings({ error: null });
   } catch (error: unknown) {
     console.error('[SyncKai] Suppression de la note en attente impossible :', error);
-    patchRatings({ error: 'La série n’a pas pu être ignorée. Réessaie.' });
+    patchRatings({ error: t('popup.ignoreFailed') });
   }
 }
 
@@ -884,7 +907,7 @@ async function loadRatings(): Promise<void> {
     patchRatings({ items: [...busy, ...items], error: null });
   } catch (error: unknown) {
     console.error('[SyncKai] Lecture des notes en attente impossible :', error);
-    patchRatings({ error: 'Impossible de lire les séries à noter.' });
+    patchRatings({ error: t('popup.ratingsReadFailed') });
   }
 }
 
@@ -900,7 +923,7 @@ async function handleCorrect(key: string): Promise<void> {
     else navigate('activity');
   } catch (e: unknown) {
     console.error('[SyncKai] Service worker injoignable :', e);
-    error = SW_UNREACHABLE;
+    error = swUnreachable();
   }
   syncStore.set({ ...syncStore.get(), busyKey: null, recentError: error });
 }
@@ -1008,9 +1031,26 @@ exclusionsStore.subscribe((state) => {
   settingsScreen.updateExclusions(state);
   render();
 });
+let pendingScroll: number | null = reopen?.scroll ?? null;
+
 settingsStore.subscribe((state) => {
   settingsScreen.updateSettings(state);
   render();
+  // Après un changement de langue : défilement restauré une fois le formulaire dessiné
+  if (state.status === 'ready' && pendingScroll !== null) {
+    main.scrollTop = pendingScroll;
+    pendingScroll = null;
+  }
+});
+
+// Nouvelle langue : le popup est rechargé (toutes les vues reconstruites) en revenant au même écran
+onLocaleChange(() => {
+  try {
+    sessionStorage.setItem(REOPEN_KEY, JSON.stringify({ screen: uiStore.get().screen, scroll: main.scrollTop }));
+  } catch {
+    // Stockage de session indisponible : retour à l'écran d'accueil du popup
+  }
+  location.reload();
 });
 
 // Les comptes à rebours et « il y a… » vieillissent tant que le popup reste ouvert

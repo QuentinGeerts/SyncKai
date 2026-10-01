@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { formatAiringStatus, isAiringCheckResult, type AiringCheckResult } from './airing.types';
+import { setLocale } from '../i18n';
+
+// Textes attendus en français
+setLocale('fr');
 
 const NOW = Date.UTC(2026, 9, 1, 12, 0, 0);
 const MIN = 60_000;

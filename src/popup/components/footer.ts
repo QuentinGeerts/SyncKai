@@ -1,3 +1,4 @@
+import { t, tp } from '../../i18n';
 import { TRACKER_LABELS, type TrackerId } from '../../shared/tracker.types';
 import { h } from '../../ui/dom';
 import { icon, warnIcon } from '../../ui/icons';
@@ -32,10 +33,10 @@ function renderStatus({ status, onOpenActivity, onReconnect }: FooterProps): HTM
         'div',
         { class: `${box} justify-start gap-2 text-muted`, attrs: { role: 'status' } },
         h('span', { class: 'h-2 w-2 shrink-0 rounded-full bg-muted opacity-60', attrs: { 'aria-hidden': 'true' } }),
-        h('span', { class: 'truncate' }, 'Aucun compte connecté'),
+        h('span', { class: 'truncate' }, t('feedback.notConnected.title')),
       );
     case 'pending': {
-      const label = `${status.count} élément${status.count > 1 ? 's' : ''} à vérifier`;
+      const label = tp('footer.toReview', status.count);
       return h(
         'div',
         { class: box, attrs: { role: 'status' } },
@@ -54,7 +55,7 @@ function renderStatus({ status, onOpenActivity, onReconnect }: FooterProps): HTM
     case 'queue-failed':
     case 'queue-pending': {
       const failed = status.kind === 'queue-failed';
-      const label = `${status.count} synchro${status.count > 1 ? 's' : ''} ${failed ? 'en échec' : 'en attente'}`;
+      const label = tp(failed ? 'footer.queueFailed' : 'footer.queuePending', status.count);
       return h(
         'div',
         { class: box, attrs: { role: 'status' } },
@@ -62,7 +63,7 @@ function renderStatus({ status, onOpenActivity, onReconnect }: FooterProps): HTM
           'button',
           {
             class: `flex h-8 min-w-0 cursor-pointer items-center gap-1 rounded-full px-2 transition-colors hover:bg-raised ${failed ? 'text-danger' : 'text-lavender'}`,
-            attrs: { type: 'button', 'aria-label': `${label} — voir l’activité`, 'data-focus': 'footer-queue' },
+            attrs: { type: 'button', 'aria-label': t('footer.seeActivity', { label }), 'data-focus': 'footer-queue' },
             on: { click: onOpenActivity },
           },
           icon(failed ? 'alert' : 'clock', 'h-3.5 w-3.5'),
@@ -71,7 +72,7 @@ function renderStatus({ status, onOpenActivity, onReconnect }: FooterProps): HTM
       );
     }
     case 'to-rate': {
-      const label = `${status.count} série${status.count > 1 ? 's' : ''} à noter`;
+      const label = tp('footer.toRate', status.count);
       return h(
         'div',
         { class: box, attrs: { role: 'status' } },
@@ -79,7 +80,7 @@ function renderStatus({ status, onOpenActivity, onReconnect }: FooterProps): HTM
           'button',
           {
             class: 'flex h-8 min-w-0 cursor-pointer items-center gap-1 rounded-full px-2 text-sakura transition-colors hover:bg-raised',
-            attrs: { type: 'button', 'aria-label': `${label} — voir l’activité`, 'data-focus': 'footer-rate' },
+            attrs: { type: 'button', 'aria-label': t('footer.seeActivity', { label }), 'data-focus': 'footer-rate' },
             on: { click: onOpenActivity },
           },
           icon('star', 'h-3.5 w-3.5'),
@@ -91,15 +92,15 @@ function renderStatus({ status, onOpenActivity, onReconnect }: FooterProps): HTM
       return h(
         'div',
         { class: `${box} gap-2`, attrs: { role: 'status' } },
-        h('span', { class: 'flex min-w-0 items-center gap-1 text-danger' }, icon('alert', 'h-3.5 w-3.5'), h('span', { class: 'truncate' }, 'Session expirée')),
+        h('span', { class: 'flex min-w-0 items-center gap-1 text-danger' }, icon('alert', 'h-3.5 w-3.5'), h('span', { class: 'truncate' }, t('common.sessionExpired'))),
         h(
           'button',
           {
             class: 'h-8 shrink-0 cursor-pointer rounded-full px-2 font-bold text-sakura transition-colors hover:bg-raised',
-            attrs: { type: 'button', 'aria-label': `Reconnecter ${TRACKER_LABELS[status.service]}`, 'data-focus': 'footer-reconnect' },
+            attrs: { type: 'button', 'aria-label': t('common.reconnectService', { service: TRACKER_LABELS[status.service] }), 'data-focus': 'footer-reconnect' },
             on: { click: () => onReconnect(status.service) },
           },
-          'Reconnecter',
+          t('common.reconnect'),
         ),
       );
     case 'ok':
@@ -107,7 +108,7 @@ function renderStatus({ status, onOpenActivity, onReconnect }: FooterProps): HTM
         'div',
         { class: box, attrs: { role: 'status' } },
         icon('check', 'h-3.5 w-3.5 text-mint', '3'),
-        h('span', { class: 'truncate' }, 'Tout est synchronisé', status.relative && h('span', { class: 'text-muted' }, ` · ${status.relative}`)),
+        h('span', { class: 'truncate' }, t('footer.allSynced'), status.relative && h('span', { class: 'text-muted' }, ` · ${status.relative}`)),
       );
   }
 }
@@ -128,7 +129,7 @@ export function renderFooter(props: FooterProps): HTMLElement {
               class: 'cursor-pointer rounded-full transition hover:brightness-110',
               attrs: {
                 type: 'button',
-                'aria-label': `Compte ${TRACKER_LABELS[service]} ${state === 'ok' ? 'connecté' : 'expiré'} — ouvrir les réglages`,
+                'aria-label': t(state === 'ok' ? 'footer.chip.ok' : 'footer.chip.expired', { service: TRACKER_LABELS[service] }),
                 'data-focus': `chip-${service}`,
               },
               on: { click: props.onOpenSettings },

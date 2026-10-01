@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import { refreshReviewBadge } from '../../shared/badge';
 import { isRecord } from '../../shared/guards';
 import { clearAniListSession, getValidToken } from '../../shared/storage';
@@ -17,7 +18,7 @@ async function request<T>(
   isRetry: boolean,
 ): Promise<T> {
   const token = await getValidToken();
-  if (!token && auth === 'required') throw new ApiError('NOT_AUTHENTICATED', 'Non connecté à AniList.');
+  if (!token && auth === 'required') throw new ApiError('NOT_AUTHENTICATED', t('api.notAuthenticated', { service: 'AniList' }));
 
   let response: Response;
   try {
@@ -31,7 +32,7 @@ async function request<T>(
       body: JSON.stringify({ query, variables }),
     });
   } catch {
-    throw new ApiError('NETWORK', 'AniList est injoignable. Vérifie ta connexion.');
+    throw new ApiError('NETWORK', t('api.network', { service: 'AniList' }));
   }
 
   let body: unknown = null;
@@ -53,7 +54,7 @@ async function request<T>(
     await refreshReviewBadge();
     // Catalogue public : on rejoue la requête sans token plutôt que d'échouer
     if (auth === 'optional') return request(query, isData, variables, auth, isRetry);
-    throw new ApiError('TOKEN_INVALID', 'Session AniList expirée. Reconnecte-toi.');
+    throw new ApiError('TOKEN_INVALID', t('api.sessionExpired', { service: 'AniList' }));
   }
 
   if (response.status === 429) {
@@ -64,18 +65,18 @@ async function request<T>(
       await sleep(delay);
       return request(query, isData, variables, auth, true);
     }
-    throw new ApiError('RATE_LIMITED', 'Trop de requêtes vers AniList. Réessaie dans une minute.');
+    throw new ApiError('RATE_LIMITED', t('api.rateLimited', { service: 'AniList' }));
   }
 
   if (!response.ok || errors.length > 0) {
     console.error('[SyncKai] Erreur API AniList :', response.status, errors);
-    throw new ApiError('API_ERROR', `Erreur AniList (${response.status}).`);
+    throw new ApiError('API_ERROR', t('api.httpError', { service: 'AniList', status: response.status }));
   }
 
   const data: unknown = isRecord(body) ? body.data : undefined;
   if (!isData(data)) {
     console.error('[SyncKai] Réponse AniList inattendue :', body);
-    throw new ApiError('INVALID_RESPONSE', 'Réponse d’AniList inattendue.');
+    throw new ApiError('INVALID_RESPONSE', t('api.invalidResponse.anilist'));
   }
   return data;
 }

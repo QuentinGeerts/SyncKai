@@ -1,11 +1,14 @@
+import { t, tp } from '../../i18n';
 import { formatAiringStatus, type AiringCheckResult } from '../../shared/airing.types';
 import type { AniListViewer } from '../../shared/anilist.types';
 import type { StreamingPlatform } from '../../shared/episode.types';
+import { backupFileName } from '../../shared/backup';
+import { exportBackup } from '../../shared/backup-store';
 import { includeSeries, type ExcludedSeries } from '../../shared/exclusions';
 import { sendMessage } from '../../shared/messages';
 import type { MalViewer } from '../../shared/mal.types';
 import { AIRING_DELAYS, type AiringDelayHours } from '../../shared/engagement.types';
-import { normalizeSettings, PERCENTAGE_RANGE, saveSettings, type NotificationLevel, type SyncSettings } from '../../shared/settings';
+import { normalizeSettings, PERCENTAGE_RANGE, saveSettings, type LanguageSetting, type NotificationLevel, type SyncSettings } from '../../shared/settings';
 import { clearMediaMappings, deleteMediaMapping, getMediaMappings } from '../../shared/storage';
 import type { MediaMapping } from '../../shared/sync.types';
 import { TRACKER_LABELS, type TrackerId } from '../../shared/tracker.types';
@@ -21,10 +24,19 @@ const SAVED_BADGE_MS = 1_500;
 const DIVIDER = 'border-t border-dotted border-line';
 const COMMAND_NAME = 'complete-episode';
 const SHORTCUTS_URL = 'chrome://extensions/shortcuts';
+const IMPORT_PAGE = 'src/import/import.html';
+const EXPORTED_BADGE_MS = 2_000;
 
-/** "Alt+Shift+S" → "Alt+Maj+S" (libellés de clavier français) */
+type ExportState = 'idle' | 'exporting' | 'exported' | 'error';
+
+/** "Alt+Shift+S" → "Alt+Maj+S" (nom de la touche Maj dans la langue active) */
 function formatShortcut(shortcut: string): string {
-  return shortcut.replace(/Shift/g, 'Maj');
+  return shortcut.replace(/Shift/g, t('settings.shortcut.shiftKey'));
+}
+
+/** "85 %" (fr, de) / "85%" (en) */
+function formatPercent(value: number | string): string {
+  return t('settings.percent', { value });
 }
 
 export interface AccountsProps {
@@ -84,22 +96,31 @@ const PLAYER_OPTIONS = [
 
 type NotifGlyph = 'pill' | 'bubble' | 'alert';
 
-const NOTIFICATION_OPTIONS: readonly { value: NotificationLevel; title: string; desc: string; glyph: NotifGlyph; recommended: boolean }[] = [
-  {
-    value: 'discreet',
-    title: 'Discrètes',
-    desc: 'Petite pastille 3 s dans un coin. Rien en plein écran, l’icône de l’extension affiche une coche.',
-    glyph: 'pill',
-    recommended: true,
-  },
-  { value: 'detailed', title: 'Détaillées', desc: 'Bulle complète avec le résultat AniList et MyAnimeList.', glyph: 'bubble', recommended: false },
-  { value: 'alerts-only', title: 'Alertes seulement', desc: 'Uniquement s’il faut agir : à vérifier, erreur, reconnexion.', glyph: 'alert', recommended: false },
-];
+/** Niveaux de notification (textes traduits à chaque rendu) */
+function notificationOptions(): readonly { value: NotificationLevel; title: string; desc: string; glyph: NotifGlyph; recommended: boolean }[] {
+  return [
+    { value: 'discreet', title: t('settings.notif.discreet.title'), desc: t('settings.notif.discreet.desc'), glyph: 'pill', recommended: true },
+    { value: 'detailed', title: t('settings.notif.detailed.title'), desc: t('settings.notif.detailed.desc'), glyph: 'bubble', recommended: false },
+    { value: 'alerts-only', title: t('settings.notif.alertsOnly.title'), desc: t('settings.notif.alertsOnly.desc'), glyph: 'alert', recommended: false },
+  ];
+}
 
 type DelayKey = `${AiringDelayHours}`;
 
 /** Délais du segmenté (valeurs texte : le contrôle segmenté travaille sur des chaînes) */
-const DELAY_OPTIONS = AIRING_DELAYS.map((hours) => ({ value: `${hours}` as DelayKey, label: `${hours} h`, aria: `${hours} heure${hours > 1 ? 's' : ''} après la diffusion` }));
+function delayOptions(): { value: DelayKey; label: string; aria: string }[] {
+  return AIRING_DELAYS.map((hours) => ({ value: `${hours}` as DelayKey, label: t('settings.delay.label', { hours }), aria: tp('settings.delay.aria', hours) }));
+}
+
+/** Langues proposées : chacune dans sa propre langue, sauf « Automatique » (langue active) */
+function languageOptions(): { value: LanguageSetting; label: string }[] {
+  return [
+    { value: 'auto', label: t('settings.language.auto') },
+    { value: 'fr', label: 'Français' },
+    { value: 'en', label: 'English' },
+    { value: 'de', label: 'Deutsch' },
+  ];
+}
 
 function delayFromKey(key: DelayKey): AiringDelayHours {
   return AIRING_DELAYS.find((hours) => `${hours}` === key) ?? AIRING_DELAYS[0];
@@ -158,7 +179,7 @@ function accountRow(service: TrackerId, state: AccountState<AniListViewer | MalV
     return [
       row(
         h('span', { class: 'h-8 w-8 shrink-0 rounded-full bg-raised motion-safe:animate-pulse' }),
-        h('div', { class: 'flex flex-1 flex-col gap-1.5 motion-safe:animate-pulse', attrs: { 'aria-busy': 'true', 'aria-label': `Chargement du compte ${label}` } },
+        h('div', { class: 'flex flex-1 flex-col gap-1.5 motion-safe:animate-pulse', attrs: { 'aria-busy': 'true', 'aria-label': t('settings.account.loading', { service: label }) } },
           h('span', { class: 'h-3 w-24 rounded bg-raised' }), h('span', { class: 'h-2.5 w-20 rounded bg-raised' })),
       ),
     ];
@@ -168,16 +189,21 @@ function accountRow(service: TrackerId, state: AccountState<AniListViewer | MalV
     return [
       row(
         serviceAvatar(service, state.expired ? 'expired' : null),
-        text(label, state.expired ? 'Session expirée' : 'Non connecté', state.expired ? 'text-danger' : 'text-muted'),
+        text(label, state.expired ? t('common.sessionExpired') : t('settings.account.notConnected'), state.expired ? 'text-danger' : 'text-muted'),
         h(
           'button',
           {
             class: `${BTN_GHOST} text-sakura`,
-            attrs: { type: 'button', 'aria-label': `${state.expired ? 'Reconnecter' : 'Connecter'} ${label}`, 'data-focus': `login-${service}`, ...(state.pending ? { disabled: '' } : {}) },
+            attrs: {
+              type: 'button',
+              'aria-label': t(state.expired ? 'common.reconnectService' : 'common.connectService', { service: label }),
+              'data-focus': `login-${service}`,
+              ...(state.pending ? { disabled: '' } : {}),
+            },
             on: { click: () => props.onLogin(service) },
           },
           state.pending && icon('spinner', 'h-3.5 w-3.5 motion-safe:animate-spin'),
-          state.pending ? 'Connexion…' : state.expired ? 'Reconnecter' : 'Connecter',
+          state.pending ? t('common.connecting') : state.expired ? t('common.reconnect') : t('common.connect'),
         ),
       ),
       state.error && h('div', { class: 'pr-2 pb-2' }, renderAlert({ message: state.error })),
@@ -193,32 +219,28 @@ function accountRow(service: TrackerId, state: AccountState<AniListViewer | MalV
     row(
       viewerAvatar(service, avatarUrl),
       text(
-        h('a', { class: 'text-ink hover:underline', attrs: { href: profileUrl, target: '_blank', rel: 'noopener noreferrer', title: `Ouvrir mon profil ${label}` } }, viewer.name),
-        `${label} · connecté`,
+        h('a', { class: 'text-ink hover:underline', attrs: { href: profileUrl, target: '_blank', rel: 'noopener noreferrer', title: t('settings.account.openProfile', { service: label }) } }, viewer.name),
+        t('settings.account.connected', { service: label }),
       ),
       h(
         'button',
         {
           class: `${BTN_GHOST} text-danger`,
-          attrs: { type: 'button', 'aria-label': `Déconnecter ${label}`, 'data-focus': `logout-${service}` },
+          attrs: { type: 'button', 'aria-label': t('settings.account.logoutAria', { service: label }), 'data-focus': `logout-${service}` },
           on: { click: () => props.onLogout(service) },
         },
-        'Déconnecter',
+        t('settings.account.logout'),
       ),
     ),
-    state.error && h('div', { class: 'pr-2 pb-2' }, renderAlert({ message: state.error, action: { label: 'Réessayer', onClick: () => props.onRetry(service) } })),
+    state.error && h('div', { class: 'pr-2 pb-2' }, renderAlert({ message: state.error, action: { label: t('common.retry'), onClick: () => props.onRetry(service) } })),
   ];
 }
 
 // ─── Correspondances ──────────────────────────────────────────────────────
 
 function numberingLabel(mapping: MediaMapping): string {
-  const source = mapping.numbering === 'displayed' ? 'numéro affiché' : 'numéro de saison';
-  return mapping.offset !== 0 ? `${source}, décalage de ${mapping.offset}` : source;
-}
-
-function plural(n: number, word: string): string {
-  return `${n} ${word}${n > 1 ? 's' : ''}`;
+  const source = t(mapping.numbering === 'displayed' ? 'settings.mappings.displayed' : 'settings.mappings.season');
+  return mapping.offset !== 0 ? t('settings.mappings.offset', { source, offset: mapping.offset }) : source;
 }
 
 // ─── Écran ────────────────────────────────────────────────────────────────
@@ -264,7 +286,7 @@ export function createSettingsScreen(): SettingsScreen {
       h(
         'span',
         { class: `min-w-0 text-[11px] font-semibold ${line.tone === 'danger' ? 'text-danger' : 'text-muted'}`, attrs: { role: 'status', 'aria-live': 'polite' } },
-        airingPending ? 'Vérification en cours…' : line.text,
+        airingPending ? t('settings.airing.checking') : line.text,
       ),
       h(
         'button',
@@ -273,13 +295,13 @@ export function createSettingsScreen(): SettingsScreen {
           attrs: {
             type: 'button',
             'data-focus': 'airing-check',
-            title: enabled ? 'Interroger le calendrier AniList maintenant' : 'Active les alertes pour vérifier',
+            title: enabled ? t('settings.airing.checkTitle') : t('settings.airing.enableFirst'),
             ...(!enabled || airingPending ? { disabled: '' } : {}),
           },
           on: { click: () => void checkAiringNow() },
         },
         airingPending && icon('spinner', 'h-3 w-3 motion-safe:animate-spin'),
-        'Vérifier maintenant',
+        t('settings.airing.checkNow'),
       ),
     ];
   }
@@ -300,7 +322,7 @@ export function createSettingsScreen(): SettingsScreen {
       airingResult = { ...result, checkedAt: result.checkedAt || Date.now() };
     } catch (error: unknown) {
       console.error('[SyncKai] Vérification des sorties impossible :', error);
-      airingResult = { checkedAt: Date.now(), notified: 0, skipped: null, error: 'service indisponible, réessaie' };
+      airingResult = { checkedAt: Date.now(), notified: 0, skipped: null, error: t('settings.airing.unavailable') };
     }
     airingNow = Date.now();
     airingPending = false;
@@ -310,8 +332,8 @@ export function createSettingsScreen(): SettingsScreen {
   function showStatus(ok: boolean): void {
     clearTimeout(badgeTimer);
     status.className = `flex items-center gap-1 text-[11px] font-bold transition-opacity ${ok ? 'text-mint' : 'text-danger'}`;
-    status.replaceChildren(icon(ok ? 'check' : 'alert', 'h-3 w-3', ok ? '3' : '2'), ok ? 'Enregistré' : 'Échec');
-    status.title = ok ? '' : 'Échec de l’enregistrement, rouvre le popup';
+    status.replaceChildren(icon(ok ? 'check' : 'alert', 'h-3 w-3', ok ? '3' : '2'), ok ? t('settings.status.saved') : t('settings.status.failed'));
+    status.title = ok ? '' : t('settings.status.failedTitle');
     // L'erreur reste affichée : l'interface ne reflète plus le stockage
     if (ok) badgeTimer = setTimeout(() => status.classList.add('opacity-0'), SAVED_BADGE_MS);
   }
@@ -334,13 +356,13 @@ export function createSettingsScreen(): SettingsScreen {
   }
 
   function renderForm(): Node[] {
-    if (loadError) return [renderAlert({ message: 'Impossible de lire les réglages. Rouvre le popup.' })];
+    if (loadError) return [renderAlert({ message: t('settings.loadError') })];
     const s = settings;
     if (!s) {
-      return [h('div', { class: `${CARD} h-40 motion-safe:animate-pulse`, attrs: { 'aria-busy': 'true', 'aria-label': 'Chargement des réglages' } })];
+      return [h('div', { class: `${CARD} h-40 motion-safe:animate-pulse`, attrs: { 'aria-busy': 'true', 'aria-label': t('settings.loading') } })];
     }
 
-    const percentLabel = h('span', { class: 'shrink-0 text-[12px] font-bold tabular-nums', attrs: { 'aria-hidden': 'true' } }, `${s.completionPercentage} %`);
+    const percentLabel = h('span', { class: 'shrink-0 text-[12px] font-bold tabular-nums', attrs: { 'aria-hidden': 'true' } }, formatPercent(s.completionPercentage));
     const range = h('input', {
       class: 'm-0 h-6 w-full cursor-pointer',
       attrs: {
@@ -350,21 +372,21 @@ export function createSettingsScreen(): SettingsScreen {
         max: String(PERCENTAGE_RANGE.max),
         step: '1',
         'aria-describedby': 'sk-pct-help',
-        'aria-valuetext': `${s.completionPercentage} %`,
+        'aria-valuetext': formatPercent(s.completionPercentage),
         'data-focus': 'pct',
       },
       on: {
         // "input" met à jour l'affichage en continu, "change" n'enregistre qu'au relâchement
         input: () => {
-          percentLabel.textContent = `${range.value} %`;
-          range.setAttribute('aria-valuetext', `${range.value} %`);
+          percentLabel.textContent = formatPercent(range.value);
+          range.setAttribute('aria-valuetext', formatPercent(range.value));
         },
         change: () => void update({ completionPercentage: Number(range.value) }),
       },
     });
     range.value = String(s.completionPercentage);
 
-    const notifCards = NOTIFICATION_OPTIONS.map((opt) => {
+    const notifCards = notificationOptions().map((opt) => {
       const input = h('input', {
         class: 'm-0 mt-0.5 h-4 w-4 shrink-0 cursor-pointer',
         attrs: { type: 'radio', name: 'sk-notif', value: opt.value, 'data-focus': `notif-${opt.value}` },
@@ -385,7 +407,7 @@ export function createSettingsScreen(): SettingsScreen {
             'span',
             { class: 'flex items-center gap-1.5' },
             h('span', { class: 'text-[13px] font-bold' }, opt.title),
-            opt.recommended && h('span', { class: 'inline-flex h-[18px] items-center rounded-full bg-mint px-2 text-[11px] font-bold text-on-fill' }, 'Recommandé'),
+            opt.recommended && h('span', { class: 'inline-flex h-[18px] items-center rounded-full bg-mint px-2 text-[11px] font-bold text-on-fill' }, t('settings.recommended')),
           ),
           h('span', { class: 'text-[11px] leading-[15px] font-semibold text-muted' }, opt.desc),
         ),
@@ -397,14 +419,14 @@ export function createSettingsScreen(): SettingsScreen {
       h(
         'section',
         { class: 'flex flex-col gap-2' },
-        sectionLabel('Lecture'),
+        sectionLabel(t('settings.section.playback')),
         h(
           'div',
           { class: `${CARD} flex flex-col gap-2 p-3` },
           h(
             'div',
             { class: 'flex items-center justify-between gap-2' },
-            h('span', { class: 'text-[13px] font-bold', attrs: { id: 'sk-player-label' } }, 'Lecteur préféré'),
+            h('span', { class: 'text-[13px] font-bold', attrs: { id: 'sk-player-label' } }, t('settings.player.label')),
             segmented({
               options: PLAYER_OPTIONS,
               current: s.preferredPlayer,
@@ -415,13 +437,13 @@ export function createSettingsScreen(): SettingsScreen {
               trackClass: 'bg-ground',
             }),
           ),
-          h('span', { class: 'text-[11px] font-semibold text-muted' }, 'Utilisé par « Ouvrir » quand l’anime est disponible sur les deux plateformes'),
+          h('span', { class: 'text-[11px] font-semibold text-muted' }, t('settings.player.help')),
         ),
       ),
       h(
         'section',
         { class: 'flex flex-col gap-2' },
-        sectionLabel('Synchronisation'),
+        sectionLabel(t('settings.section.sync')),
         h(
           'div',
           { class: `${CARD} flex flex-col gap-2 px-3 pt-2 pb-3` },
@@ -431,17 +453,17 @@ export function createSettingsScreen(): SettingsScreen {
             h(
               'div',
               { class: 'flex items-center justify-between gap-3' },
-              h('label', { class: 'cursor-pointer text-[13px] font-bold', attrs: { for: 'sk-auto' } }, 'Synchro automatique'),
+              h('label', { class: 'cursor-pointer text-[13px] font-bold', attrs: { for: 'sk-auto' } }, t('settings.autoSync.label')),
               renderSwitch('sk-auto', s.autoSync, 'sk-auto-help', (checked) => void update({ autoSync: checked })),
             ),
-            h('span', { class: 'text-[11px] font-semibold text-muted', attrs: { id: 'sk-auto-help' } }, 'En pause, aucun épisode n’est envoyé'),
+            h('span', { class: 'text-[11px] font-semibold text-muted', attrs: { id: 'sk-auto-help' } }, t('settings.autoSync.help')),
           ),
           h(
             'fieldset',
             { class: `m-0 flex flex-col border-0 p-0 pt-2 ${DIVIDER}` },
-            h('legend', { class: 'float-left mb-0.5 w-full p-0 text-[13px] font-bold' }, 'Épisode vu'),
-            renderRadio('sk-trigger', s.completionTrigger === 'credits', 'Au début du générique (recommandé)', () => void update({ completionTrigger: 'credits' }, true)),
-            renderRadio('sk-trigger', s.completionTrigger === 'percentage', 'À un pourcentage fixe', () => void update({ completionTrigger: 'percentage' }, true)),
+            h('legend', { class: 'float-left mb-0.5 w-full p-0 text-[13px] font-bold' }, t('settings.trigger.legend')),
+            renderRadio('sk-trigger', s.completionTrigger === 'credits', t('settings.trigger.credits'), () => void update({ completionTrigger: 'credits' }, true)),
+            renderRadio('sk-trigger', s.completionTrigger === 'percentage', t('settings.trigger.percentage'), () => void update({ completionTrigger: 'percentage' }, true)),
           ),
           h(
             'div',
@@ -449,14 +471,14 @@ export function createSettingsScreen(): SettingsScreen {
             h(
               'div',
               { class: 'flex items-center justify-between gap-3' },
-              h('label', { class: 'text-[12px] font-bold', attrs: { for: 'sk-pct' } }, s.completionTrigger === 'percentage' ? 'Pourcentage' : 'Pourcentage de repli'),
+              h('label', { class: 'text-[12px] font-bold', attrs: { for: 'sk-pct' } }, t(s.completionTrigger === 'percentage' ? 'settings.percentage.label' : 'settings.percentage.fallbackLabel')),
               percentLabel,
             ),
             range,
             h(
               'span',
               { class: 'text-[11px] font-semibold text-muted', attrs: { id: 'sk-pct-help' } },
-              s.completionTrigger === 'percentage' ? 'Appliqué à partir de l’épisode suivant' : 'Utilisé si la plateforme ne fournit pas le générique (ADN)',
+              t(s.completionTrigger === 'percentage' ? 'settings.percentage.help' : 'settings.percentage.fallbackHelp'),
             ),
           ),
           renderShortcutHint(),
@@ -465,44 +487,44 @@ export function createSettingsScreen(): SettingsScreen {
       h(
         'section',
         { class: 'flex flex-col gap-2' },
-        sectionLabel('Notifications sur la page', 'sk-notif-title'),
+        sectionLabel(t('settings.section.notifications'), 'sk-notif-title'),
         h(
           'div',
           { class: `${CARD} flex flex-col gap-2 p-2` },
           h('div', { class: 'flex flex-col gap-1', attrs: { role: 'radiogroup', 'aria-labelledby': 'sk-notif-title' } }, ...notifCards),
-          h('span', { class: 'px-1 text-[11px] font-semibold text-muted' }, 'Les alertes s’affichent toujours, quel que soit ce réglage.'),
+          h('span', { class: 'px-1 text-[11px] font-semibold text-muted' }, t('settings.notif.alertsAlways')),
           h(
             'div',
             { class: `flex flex-col px-1 pt-2 pb-1 ${DIVIDER}` },
             h(
               'div',
               { class: 'flex items-center justify-between gap-3' },
-              h('label', { class: 'cursor-pointer text-[13px] font-bold', attrs: { for: 'sk-rating' } }, 'Proposer de noter en fin de série'),
+              h('label', { class: 'cursor-pointer text-[13px] font-bold', attrs: { for: 'sk-rating' } }, t('settings.ratingPrompt.label')),
               renderSwitch('sk-rating', s.ratingPrompt, 'sk-rating-help', (checked) => void update({ ratingPrompt: checked })),
             ),
-            h('span', { class: 'text-[11px] font-semibold text-muted', attrs: { id: 'sk-rating-help' } }, 'Une bulle « Ta note ? » quand une série passe en Terminé'),
+            h('span', { class: 'text-[11px] font-semibold text-muted', attrs: { id: 'sk-rating-help' } }, t('settings.ratingPrompt.help')),
           ),
         ),
       ),
       h(
         'section',
         { class: 'flex flex-col gap-2' },
-        sectionLabel('Nouveaux épisodes'),
+        sectionLabel(t('settings.section.airing')),
         h(
           'div',
           { class: `${CARD} flex flex-col gap-2 px-3 pt-2 pb-3` },
           h(
             'div',
             { class: 'flex items-center justify-between gap-3' },
-            h('label', { class: 'cursor-pointer text-[13px] font-bold', attrs: { for: 'sk-airing' } }, 'Me notifier à la sortie d’un épisode'),
+            h('label', { class: 'cursor-pointer text-[13px] font-bold', attrs: { for: 'sk-airing' } }, t('settings.airing.label')),
             renderSwitch('sk-airing', s.airingAlerts, 'sk-airing-help', (checked) => void update({ airingAlerts: checked }, true)),
           ),
           h(
             'div',
             { class: `flex items-center justify-between gap-2 pt-2 ${DIVIDER}` },
-            h('span', { class: `text-[12px] font-bold ${s.airingAlerts ? '' : 'text-muted'}`, attrs: { id: 'sk-delay-label' } }, 'Délai'),
+            h('span', { class: `text-[12px] font-bold ${s.airingAlerts ? '' : 'text-muted'}`, attrs: { id: 'sk-delay-label' } }, t('settings.delay.title')),
             segmented({
-              options: DELAY_OPTIONS,
+              options: delayOptions(),
               current: `${s.airingDelayHours}`,
               onPick: (value) => void update({ airingDelayHours: delayFromKey(value) }, true),
               attrs: { 'aria-labelledby': 'sk-delay-label', 'aria-describedby': 'sk-airing-help' },
@@ -515,21 +537,43 @@ export function createSettingsScreen(): SettingsScreen {
           h(
             'span',
             { class: 'text-[11px] font-semibold text-muted', attrs: { id: 'sk-airing-help' } },
-            'Heure de diffusion au Japon ; Crunchyroll et ADN publient souvent un peu plus tard.',
+            t('settings.airing.help'),
           ),
           airingRow(),
+        ),
+      ),
+      h(
+        'section',
+        { class: 'flex flex-col gap-2' },
+        sectionLabel(t('settings.section.language'), 'sk-language-label'),
+        h(
+          'div',
+          { class: `${CARD} flex flex-col gap-2 p-3` },
+          segmented({
+            options: languageOptions(),
+            current: s.language,
+            // Enregistré tout de suite : le popup se redessine dans la nouvelle langue (storage.onChanged)
+            onPick: (value) => void update({ language: value }, true),
+            attrs: { 'aria-labelledby': 'sk-language-label', 'aria-describedby': 'sk-language-help' },
+            focusKey: 'language',
+            activeClass: 'bg-sakura',
+            trackClass: 'bg-ground self-start',
+          }),
+          h('span', { class: 'text-[11px] font-semibold text-muted', attrs: { id: 'sk-language-help' } }, t('settings.language.help')),
         ),
       ),
     ];
   }
 
   function renderShortcutHint(): HTMLElement {
+    // Touche mise en forme (<kbd>) au milieu de la phrase traduite
+    const [before = '', after = ''] = t('settings.shortcut.hint').split('{key}');
     const text =
       shortcut === undefined
-        ? 'Raccourci clavier…'
+        ? t('settings.shortcut.loading')
         : shortcut
-          ? h('span', {}, 'Raccourci : ', h('kbd', { class: 'font-body font-bold text-ink' }, formatShortcut(shortcut)), ' pour valider l’épisode en cours')
-          : 'Aucun raccourci défini pour valider l’épisode en cours';
+          ? h('span', {}, before, h('kbd', { class: 'font-body font-bold text-ink' }, formatShortcut(shortcut)), after)
+          : t('settings.shortcut.none');
     return h(
       'div',
       { class: `flex items-center justify-between gap-2 pt-2 ${DIVIDER}` },
@@ -538,11 +582,11 @@ export function createSettingsScreen(): SettingsScreen {
         'button',
         {
           class: `${LINK} inline-flex min-h-8 shrink-0 cursor-pointer items-center bg-transparent px-1 text-[12px] font-bold`,
-          attrs: { type: 'button', 'aria-label': 'Modifier le raccourci clavier (page des raccourcis de Chrome)', 'data-focus': 'shortcut' },
+          attrs: { type: 'button', 'aria-label': t('settings.shortcut.editAria'), 'data-focus': 'shortcut' },
           // Les pages chrome:// ne s'ouvrent pas via un lien : passage par l'API tabs
           on: { click: () => void chrome.tabs.create({ url: SHORTCUTS_URL }) },
         },
-        shortcut ? 'Modifier' : 'Définir',
+        shortcut ? t('settings.shortcut.edit') : t('settings.shortcut.set'),
       ),
     );
   }
@@ -575,25 +619,25 @@ export function createSettingsScreen(): SettingsScreen {
         'button',
         {
           class: `${BTN_GHOST} text-sakura`,
-          attrs: { type: 'button', 'aria-label': `Réactiver la synchro de ${item.label}`, 'data-focus': `include-${item.id}`, ...(reactivatingId !== null ? { disabled: '' } : {}) },
+          attrs: { type: 'button', 'aria-label': t('settings.exclusions.reactivateAria', { title: item.label }), 'data-focus': `include-${item.id}`, ...(reactivatingId !== null ? { disabled: '' } : {}) },
           on: { click: () => void reactivate(item.id) },
         },
         busy && icon('spinner', 'h-3 w-3 motion-safe:animate-spin'),
-        'Réactiver',
+        t('settings.exclusions.reactivate'),
       ),
     );
   }
 
   function renderExclusions(): Child[] {
     if (exclusions.status === 'loading') {
-      return [h('div', { class: 'm-3 h-5 rounded bg-raised motion-safe:animate-pulse', attrs: { 'aria-busy': 'true', 'aria-label': 'Chargement des séries exclues' } })];
+      return [h('div', { class: 'm-3 h-5 rounded bg-raised motion-safe:animate-pulse', attrs: { 'aria-busy': 'true', 'aria-label': t('settings.exclusions.loading') } })];
     }
-    if (exclusions.status === 'error') return [h('div', { class: 'p-3' }, renderAlert({ message: 'Impossible de lire les séries exclues.' }))];
+    if (exclusions.status === 'error') return [h('div', { class: 'p-3' }, renderAlert({ message: t('settings.exclusions.loadError') }))];
     const { items } = exclusions;
     return [
       items.length > 0
         ? h('ul', { class: 'm-0 list-none py-0 pr-1 pl-3' }, ...items.map((item, i) => renderExclusionRow(item, i === 0)))
-        : h('p', { class: 'm-0 flex min-h-11 items-center px-3 text-[12px] text-muted' }, 'Aucune série exclue.'),
+        : h('p', { class: 'm-0 flex min-h-11 items-center px-3 text-[12px] text-muted' }, t('settings.exclusions.empty')),
       exclusionsError && h('div', { class: 'px-3 pb-3' }, renderAlert({ message: exclusionsError })),
     ];
   }
@@ -607,7 +651,7 @@ export function createSettingsScreen(): SettingsScreen {
       await includeSeries(id);
     } catch (error: unknown) {
       console.error('[SyncKai] Réactivation de la série impossible :', error);
-      exclusionsError = 'La série n’a pas pu être réactivée. Réessaie.';
+      exclusionsError = t('settings.exclusions.reactivateFailed');
     }
     reactivatingId = null;
     drawExclusions();
@@ -619,7 +663,7 @@ export function createSettingsScreen(): SettingsScreen {
 
   function renderMappings(): Child[] {
     const count = mappings.length;
-    const summary = count > 0 ? `${plural(count, 'série')} ${count > 1 ? 'mémorisées' : 'mémorisée'}` : 'Aucune correspondance pour l’instant';
+    const summary = count > 0 ? tp('settings.mappings.count', count) : t('settings.mappings.empty');
 
     const header =
       count > 0
@@ -640,7 +684,7 @@ export function createSettingsScreen(): SettingsScreen {
             h(
               'span',
               { class: 'inline-flex items-center gap-1 text-[12px] font-bold text-sakura' },
-              expanded ? 'Masquer' : 'Gérer',
+              expanded ? t('settings.mappings.hide') : t('settings.mappings.manage'),
               icon('chevronDown', `h-3 w-3 transition-transform ${expanded ? 'rotate-180' : ''}`, '2.6'),
             ),
           )
@@ -664,7 +708,7 @@ export function createSettingsScreen(): SettingsScreen {
             h(
               'a',
               { class: LINK, attrs: { href: `https://anilist.co/anime/${mapping.mediaId}`, target: '_blank', rel: 'noopener noreferrer' } },
-              mapping.mediaTitle ?? `Fiche AniList #${mapping.mediaId}`,
+              mapping.mediaTitle ?? t('settings.mappings.entryFallback', { id: mapping.mediaId }),
             ),
             ` · ${numberingLabel(mapping)}`,
           ),
@@ -673,10 +717,10 @@ export function createSettingsScreen(): SettingsScreen {
           'button',
           {
             class: `${BTN_GHOST} text-danger`,
-            attrs: { type: 'button', 'aria-label': `Oublier ${label}`, title: 'La correspondance sera recalculée au prochain épisode', 'data-focus': `forget-${key}` },
+            attrs: { type: 'button', 'aria-label': t('settings.mappings.forgetAria', { label }), title: t('settings.mappings.forgetTitle'), 'data-focus': `forget-${key}` },
             on: { click: () => void runMappingAction(() => deleteMediaMapping(key)) },
           },
-          'Oublier',
+          t('settings.mappings.forget'),
         ),
       );
     });
@@ -685,7 +729,7 @@ export function createSettingsScreen(): SettingsScreen {
       ? h(
           'div',
           { class: 'flex flex-wrap items-center justify-end gap-2' },
-          h('span', { class: 'text-[12px] font-semibold text-butter' }, 'Oublier toutes les correspondances ?'),
+          h('span', { class: 'text-[12px] font-semibold text-butter' }, t('settings.mappings.resetConfirm')),
           h(
             'button',
             {
@@ -698,7 +742,7 @@ export function createSettingsScreen(): SettingsScreen {
                 },
               },
             },
-            'Annuler',
+            t('common.cancel'),
           ),
           h(
             'button',
@@ -712,7 +756,7 @@ export function createSettingsScreen(): SettingsScreen {
                 },
               },
             },
-            'Confirmer',
+            t('common.confirm'),
           ),
         )
       : h(
@@ -730,13 +774,13 @@ export function createSettingsScreen(): SettingsScreen {
                 },
               },
             },
-            'Tout réinitialiser',
+            t('settings.mappings.reset'),
           ),
         );
 
     return [
       header,
-      h('p', { class: 'm-0 px-3 pb-2 text-[11px] font-semibold text-muted' }, 'Oublier une correspondance la fait recalculer au prochain épisode (utile si elle est fausse).'),
+      h('p', { class: 'm-0 px-3 pb-2 text-[11px] font-semibold text-muted' }, t('settings.mappings.help')),
       h('ul', { class: 'm-0 list-none py-0 pr-1 pl-3', attrs: { id: 'sk-maps' } }, ...rows),
       mappingsError && h('div', { class: 'px-3 pb-2' }, renderAlert({ message: mappingsError })),
       h('div', { class: `px-3 pt-2 pb-3 ${DIVIDER}` }, resetControls),
@@ -749,9 +793,77 @@ export function createSettingsScreen(): SettingsScreen {
       mappingsError = null;
     } catch (error: unknown) {
       console.error('[SyncKai] Modification des correspondances impossible :', error);
-      mappingsError = 'La modification n’a pas pu être enregistrée. Réessaie.';
+      mappingsError = t('settings.mappings.saveFailed');
     }
     await refreshMappings();
+  }
+
+  // ─── Sauvegarde ───
+  const backupCard = h('div', { class: `${CARD} flex flex-col gap-2 px-3 py-2.5` });
+  let exportState: ExportState = 'idle';
+  let exportTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function drawBackup(): void {
+    preserveFocus(backupCard, () => backupCard.replaceChildren(...nodes(renderBackup())));
+  }
+
+  function renderBackup(): Child[] {
+    const exporting = exportState === 'exporting';
+    return [
+      h('p', { class: 'm-0 text-[11px] font-semibold text-muted' }, t('settings.backup.help')),
+      h(
+        'div',
+        { class: 'flex flex-wrap items-center justify-end gap-2' },
+        exportState === 'exported' &&
+          h('span', { class: 'mr-auto flex items-center gap-1 text-[11px] font-bold text-mint', attrs: { role: 'status' } }, icon('check', 'h-3 w-3', '3'), t('settings.backup.exported')),
+        h(
+          'button',
+          {
+            class: `${BTN_GHOST} border border-line px-3.5 text-ink`,
+            attrs: { type: 'button', 'data-focus': 'backup-export', title: t('settings.backup.exportTitle'), ...(exporting ? { disabled: '' } : {}) },
+            on: { click: () => void runExport() },
+          },
+          exporting && icon('spinner', 'h-3 w-3 motion-safe:animate-spin'),
+          t('settings.backup.export'),
+        ),
+        h(
+          'button',
+          {
+            class: `${BTN_GHOST} border border-line px-3.5 text-sakura`,
+            attrs: { type: 'button', 'data-focus': 'backup-import', title: t('settings.backup.importTitle') },
+            // Onglet dédié : le sélecteur de fichier fermerait le popup
+            on: { click: () => void chrome.tabs.create({ url: chrome.runtime.getURL(IMPORT_PAGE) }) },
+          },
+          t('settings.backup.import'),
+        ),
+      ),
+      exportState === 'error' && renderAlert({ message: t('settings.backup.exportFailed') }),
+    ];
+  }
+
+  async function runExport(): Promise<void> {
+    clearTimeout(exportTimer);
+    exportState = 'exporting';
+    drawBackup();
+    try {
+      const backup = await exportBackup();
+      // Téléchargement via un lien temporaire : aucune permission "downloads" nécessaire
+      const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }));
+      const link = h('a', { attrs: { href: url, download: backupFileName(new Date()) } });
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1_000);
+      exportState = 'exported';
+      exportTimer = setTimeout(() => {
+        exportState = 'idle';
+        drawBackup();
+      }, EXPORTED_BADGE_MS);
+    } catch (error: unknown) {
+      console.error('[SyncKai] Export de la sauvegarde impossible :', error);
+      exportState = 'error';
+    }
+    drawBackup();
   }
 
   async function refreshMappings(): Promise<void> {
@@ -759,7 +871,7 @@ export function createSettingsScreen(): SettingsScreen {
       mappings = Object.entries(await getMediaMappings()).sort(([a], [b]) => a.localeCompare(b));
     } catch (error: unknown) {
       console.error('[SyncKai] Lecture des correspondances impossible :', error);
-      mappingsError = 'Impossible de lire les correspondances.';
+      mappingsError = t('settings.mappings.loadError');
     }
     if (mappings.length === 0) expanded = false;
     drawMappings();
@@ -768,14 +880,15 @@ export function createSettingsScreen(): SettingsScreen {
   const element = h(
     'div',
     { class: 'flex flex-col gap-4 pb-3' },
-    h('section', { class: 'flex flex-col gap-2' }, sectionLabel('Comptes'), accountsCard),
+    h('section', { class: 'flex flex-col gap-2' }, sectionLabel(t('settings.section.accounts')), accountsCard),
     formSlot,
-    h('section', { class: 'flex flex-col gap-2' }, sectionLabel('Correspondances'), mappingsCard),
-    h('section', { class: 'flex flex-col gap-2' }, sectionLabel('Séries exclues'), exclusionsCard),
+    h('section', { class: 'flex flex-col gap-2' }, sectionLabel(t('settings.section.mappings')), mappingsCard),
+    h('section', { class: 'flex flex-col gap-2' }, sectionLabel(t('settings.section.exclusions')), exclusionsCard),
+    h('section', { class: 'flex flex-col gap-2' }, sectionLabel(t('settings.section.backup')), backupCard),
     h(
       'section',
       { class: 'flex flex-col gap-2' },
-      sectionLabel('À propos'),
+      sectionLabel(t('settings.section.about')),
       h(
         'div',
         { class: `${CARD} flex flex-col px-3 py-1` },
@@ -788,8 +901,8 @@ export function createSettingsScreen(): SettingsScreen {
         h(
           'div',
           { class: `flex min-h-10 items-center gap-4 ${DIVIDER}` },
-          h('a', { class: `${LINK} inline-flex min-h-8 items-center text-[12px] font-bold`, attrs: { href: REPO_URL, target: '_blank', rel: 'noopener noreferrer' } }, 'Code source sur GitHub'),
-          h('a', { class: `${LINK} inline-flex min-h-8 items-center text-[12px] font-bold`, attrs: { href: ISSUES_URL, target: '_blank', rel: 'noopener noreferrer' } }, 'Signaler un problème'),
+          h('a', { class: `${LINK} inline-flex min-h-8 items-center text-[12px] font-bold`, attrs: { href: REPO_URL, target: '_blank', rel: 'noopener noreferrer' } }, t('settings.about.source')),
+          h('a', { class: `${LINK} inline-flex min-h-8 items-center text-[12px] font-bold`, attrs: { href: ISSUES_URL, target: '_blank', rel: 'noopener noreferrer' } }, t('settings.about.issues')),
         ),
       ),
     ),
@@ -798,6 +911,7 @@ export function createSettingsScreen(): SettingsScreen {
   drawForm();
   drawMappings();
   drawExclusions();
+  drawBackup();
   void loadShortcut();
 
   return {

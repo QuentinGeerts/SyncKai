@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import { isRecord } from '../../shared/guards';
 import { toSafeUrl } from '../../shared/url';
 import { anilistPublicQuery } from './client';
@@ -118,6 +119,6 @@ function isMediaData(data: unknown): data is { Media: unknown } {
 /** Fiche du catalogue par identifiant AniList (sans compte requis). */
 export async function getAnimeById(id: number): Promise<AniListMedia> {
   const media = parseMedia((await anilistPublicQuery(BY_ID_QUERY, isMediaData, { id })).Media);
-  if (!media) throw new ApiError('INVALID_RESPONSE', 'Réponse d’AniList inattendue.');
+  if (!media) throw new ApiError('INVALID_RESPONSE', t('api.invalidResponse.anilist'));
   return media;
 }

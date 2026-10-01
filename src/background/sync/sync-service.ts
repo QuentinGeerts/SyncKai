@@ -1,3 +1,4 @@
+import { t, type MessageKey } from '../../i18n';
 import type { AniListErrorCode } from '../../shared/anilist.types';
 import { flashSyncBadge, refreshReviewBadge } from '../../shared/badge';
 import type { EpisodeInfo } from '../../shared/episode.types';
@@ -30,8 +31,8 @@ const LOG_PREFIX = '[SyncKai:sync]';
 const MAX_SEARCH_RESULTS = 10;
 
 const SKIP_REASONS = {
-  'already-completed': 'Déjà marqué comme terminé',
-} as const;
+  'already-completed': 'sync.alreadyCompleted',
+} as const satisfies Record<string, MessageKey>;
 
 /** Convertit une erreur en résultat affichable (les handlers de messages ne lèvent jamais). */
 function toErrorOutcome(error: unknown): SyncOutcome {
@@ -40,13 +41,13 @@ function toErrorOutcome(error: unknown): SyncOutcome {
     return { status: 'error', message: error.message, code: error.code };
   }
   console.error(LOG_PREFIX, 'Erreur inattendue :', error);
-  return { status: 'error', message: 'Erreur inattendue pendant la synchronisation.' };
+  return { status: 'error', message: t('error.unexpectedSync') };
 }
 
 function toErrorResult(error: unknown): { ok: false; code: AniListErrorCode; message: string } {
   if (error instanceof ApiError) return { ok: false, code: error.code, message: error.message };
   console.error(LOG_PREFIX, 'Erreur inattendue :', error);
-  return { ok: false, code: 'API_ERROR', message: 'Erreur inattendue.' };
+  return { ok: false, code: 'API_ERROR', message: t('error.unexpected') };
 }
 
 async function queueReview(review: PendingReview): Promise<void> {
@@ -75,7 +76,7 @@ async function writeToService(
 ): Promise<ServiceWrite> {
   const label = TRACKER_LABELS[tracker.id];
   const id = tracker.resolveId(catalog);
-  if (id === null) return { result: { service: tracker.id, outcome: { status: 'skipped', reason: 'Pas de fiche équivalente' } }, alreadyCompleted: false };
+  if (id === null) return { result: { service: tracker.id, outcome: { status: 'skipped', reason: t('sync.noEquivalent') } }, alreadyCompleted: false };
 
   try {
     // Lecture fraîche juste avant l'écriture (la liste a pu changer depuis un autre appareil)
@@ -85,7 +86,7 @@ async function writeToService(
       return {
         result: {
           service: tracker.id,
-          outcome: { status: 'skipped', reason: `Épisode ${progress} au-delà des ${current.episodes} épisodes de la fiche` },
+          outcome: { status: 'skipped', reason: t('sync.beyondEntry', { progress, total: current.episodes }) },
         },
         alreadyCompleted: false,
       };
@@ -100,7 +101,7 @@ async function writeToService(
           outcome:
             decision.reason === 'up-to-date'
               ? { status: 'up-to-date', progress: current.entry?.progress ?? progress }
-              : { status: 'skipped', reason: SKIP_REASONS[decision.reason] },
+              : { status: 'skipped', reason: t(SKIP_REASONS[decision.reason]) },
         },
         alreadyCompleted: decision.reason === 'already-completed',
       };
@@ -117,7 +118,7 @@ async function writeToService(
     return {
       result: {
         service: tracker.id,
-        outcome: error instanceof ApiError ? { status: 'error', message: error.message, code: error.code } : { status: 'error', message: 'Erreur inattendue.' },
+        outcome: error instanceof ApiError ? { status: 'error', message: error.message, code: error.code } : { status: 'error', message: t('error.unexpected') },
       },
       alreadyCompleted: false,
     };
@@ -234,12 +235,12 @@ export async function syncEpisode(episode: EpisodeInfo, only: readonly TrackerId
 export async function resolveReview({ key, mediaId, progress }: ResolveReviewPayload): Promise<SyncOutcome> {
   try {
     const review = (await getPendingReviews()).find((r) => r.key === key);
-    if (!review) return { status: 'error', message: 'Cette vérification n’existe plus.' };
+    if (!review) return { status: 'error', message: t('sync.reviewGone') };
 
     const catalog = await getCatalogMedia(mediaId);
     const mapping = mappingFromManualChoice(review.episode, mediaId, progress, catalog.episodes);
     if (!mapping) {
-      return { status: 'error', message: `Épisode ${progress} invalide pour « ${catalog.title} » (${catalog.episodes ?? '?'} épisodes).` };
+      return { status: 'error', message: t('sync.invalidEpisode', { progress, title: catalog.title, total: catalog.episodes ?? '?' }) };
     }
 
     await saveMediaMapping(key, { ...mapping, seriesLabel: seasonLabel(review.episode), mediaTitle: catalog.title });
@@ -256,7 +257,7 @@ export async function resolveReview({ key, mediaId, progress }: ResolveReviewPay
 export async function reopenReview(key: string): Promise<Result<null, AniListErrorCode | 'NOT_FOUND'>> {
   try {
     const recent = (await getRecentSyncs()).find((s) => s.key === key);
-    if (!recent) return { ok: false, code: 'NOT_FOUND', message: 'Synchronisation introuvable.' };
+    if (!recent) return { ok: false, code: 'NOT_FOUND', message: t('sync.recentNotFound') };
 
     let candidates: CandidateSummary[] = await findReviewCandidates(recent.episode, recent.mediaId);
     // La fiche actuelle doit rester sélectionnable, même si la recherche ne la renvoie plus
@@ -267,7 +268,7 @@ export async function reopenReview(key: string): Promise<Result<null, AniListErr
     await queueReview({
       key,
       episode: recent.episode,
-      reason: `Correction : actuellement synchronisé avec « ${recent.mediaTitle} »`,
+      reason: t('sync.correctionReason', { title: recent.mediaTitle }),
       suggestion: { mediaId: recent.mediaId, progress: recent.progress },
       candidates,
       previous: { mediaId: recent.mediaId, title: recent.mediaTitle, progress: recent.progress },

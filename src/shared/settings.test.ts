@@ -17,6 +17,7 @@ describe('normalizeSettings', () => {
       ratingPrompt: false,
       airingAlerts: false,
       airingDelayHours: 3,
+      language: 'de',
     } as const;
     expect(normalizeSettings(settings)).toEqual(settings);
   });
@@ -32,6 +33,12 @@ describe('normalizeSettings', () => {
       notificationLevel: 'discreet',
       preferredPlayer: 'crunchyroll',
     });
+  });
+
+  it('rejette une langue inconnue (auto par défaut)', () => {
+    expect(normalizeSettings({ language: 'es' }).language).toBe('auto');
+    expect(normalizeSettings({ language: 'fr' }).language).toBe('fr');
+    expect(normalizeSettings({}).language).toBe('auto');
   });
 
   it('borne et arrondit le pourcentage, rejette les valeurs invalides', () => {

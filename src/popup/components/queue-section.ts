@@ -1,3 +1,4 @@
+import { t, tp } from '../../i18n';
 import type { EpisodeInfo } from '../../shared/episode.types';
 import type { SyncQueueItem } from '../../shared/queue.types';
 import { TRACKER_LABELS } from '../../shared/tracker.types';
@@ -22,11 +23,10 @@ const DAY = 24 * HOUR;
 /** Délai avant la prochaine tentative : « dans 5 min », « dans 2 h »… */
 function formatUntil(timestamp: number, now: number): string {
   const diff = timestamp - now;
-  if (diff < MINUTE) return 'imminent';
-  if (diff < HOUR) return `dans ${Math.ceil(diff / MINUTE)} min`;
-  if (diff < DAY) return `dans ${Math.round(diff / HOUR)} h`;
-  const days = Math.round(diff / DAY);
-  return `dans ${days} jour${days > 1 ? 's' : ''}`;
+  if (diff < MINUTE) return t('queue.until.imminent');
+  if (diff < HOUR) return t('queue.until.minutes', { count: Math.ceil(diff / MINUTE) });
+  if (diff < DAY) return t('queue.until.hours', { count: Math.round(diff / HOUR) });
+  return tp('queue.until.days', Math.round(diff / DAY));
 }
 
 function episodeLabel(episode: EpisodeInfo): string {
@@ -61,12 +61,12 @@ function renderItem(item: SyncQueueItem, { queue, now, onRetry, onAbandon }: Que
       'div',
       { class: 'flex items-center justify-between gap-2' },
       failed
-        ? h('span', { class: 'flex min-w-0 items-center gap-1 text-[11px] font-bold text-danger' }, icon('alert', 'h-3 w-3'), h('span', { class: 'truncate' }, 'Échec — abandonné'))
+        ? h('span', { class: 'flex min-w-0 items-center gap-1 text-[11px] font-bold text-danger' }, icon('alert', 'h-3 w-3'), h('span', { class: 'truncate' }, t('queue.failed')))
         : h(
             'span',
             { class: 'flex min-w-0 items-center gap-1 text-[11px] font-bold text-lavender' },
             icon('clock', 'h-3 w-3'),
-            h('span', { class: 'truncate' }, `Nouvel essai ${formatUntil(item.nextAttemptAt, now)}`),
+            h('span', { class: 'truncate' }, t('queue.nextAttempt', { when: formatUntil(item.nextAttemptAt, now) })),
           ),
       h(
         'div',
@@ -75,20 +75,20 @@ function renderItem(item: SyncQueueItem, { queue, now, onRetry, onAbandon }: Que
           'button',
           {
             class: `${BTN_GHOST} px-2.5 text-muted`,
-            attrs: { type: 'button', 'aria-label': `Abandonner la synchro de ${title}`, 'data-focus': `queue-drop-${item.id}`, ...(busy ? { disabled: '' } : {}) },
+            attrs: { type: 'button', 'aria-label': t('queue.abandonAria', { title }), 'data-focus': `queue-drop-${item.id}`, ...(busy ? { disabled: '' } : {}) },
             on: { click: () => onAbandon(item.id) },
           },
-          'Abandonner',
+          t('queue.abandon'),
         ),
         h(
           'button',
           {
             class: `${BTN_GHOST} px-2.5 text-sakura`,
-            attrs: { type: 'button', 'aria-label': `Réessayer la synchro de ${title}`, 'data-focus': `queue-retry-${item.id}`, ...(busy ? { disabled: '', 'aria-busy': 'true' } : {}) },
+            attrs: { type: 'button', 'aria-label': t('queue.retryAria', { title }), 'data-focus': `queue-retry-${item.id}`, ...(busy ? { disabled: '', 'aria-busy': 'true' } : {}) },
             on: { click: () => onRetry(item.id) },
           },
           busy ? icon('spinner', 'h-3 w-3 motion-safe:animate-spin') : icon('retry', 'h-3 w-3', '2.4'),
-          'Réessayer',
+          t('common.retry'),
         ),
       ),
     ),
@@ -102,9 +102,9 @@ export function renderQueueSection(props: QueueSectionProps): HTMLElement | null
 
   return h(
     'section',
-    { class: 'flex flex-col gap-2', attrs: { 'aria-label': 'Synchros en attente' } },
+    { class: 'flex flex-col gap-2', attrs: { 'aria-label': t('queue.section') } },
     ...nodes([
-      sectionTitle(`Synchros en attente (${items.length})`, { text: 'マチ', class: 'text-lavender' }),
+      sectionTitle(t('queue.sectionTitle', { count: items.length }), { text: 'マチ', class: 'text-lavender' }),
       notice &&
         h(
           'p',

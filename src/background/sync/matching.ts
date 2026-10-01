@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import type { EpisodeInfo, StreamingPlatform } from '../../shared/episode.types';
 import type { MediaMapping, NumberingMode } from '../../shared/sync.types';
 
@@ -187,7 +188,7 @@ export function resolveTarget(episode: EpisodeNumbers, candidates: MediaCandidat
 
   // Sans lien vers la plateforme, repli sur un titre identique
   const pool = linked.length > 0 ? linked : seasons.filter((c) => c.titles.some((t) => normalizeTitle(t) === animeKey));
-  if (pool.length === 0) return { ok: false, reason: `Aucune fiche AniList trouvée pour « ${episode.animeTitle} »` };
+  if (pool.length === 0) return { ok: false, reason: t('match.noEntry', { title: episode.animeTitle }) };
 
   // Titre seul jugé fiable uniquement s'il désigne UNE fiche série et qu'il s'agit de la 1re saison
   // (fréquent sur ADN, rarement lié sur AniList). Remakes au même titre → plusieurs fiches → à vérifier.
@@ -196,9 +197,9 @@ export function resolveTarget(episode: EpisodeNumbers, candidates: MediaCandidat
 
   const displayed = episode.displayedEpisodeNumber;
   const relative = episode.seasonEpisodeNumber ?? displayed;
-  if (relative === null) return { ok: false, reason: 'Numéro d’épisode introuvable' };
+  if (relative === null) return { ok: false, reason: t('match.noNumber') };
   if (!Number.isInteger(relative) || (displayed !== null && !Number.isInteger(displayed))) {
-    return { ok: false, reason: 'Épisode spécial (numéro non entier) : non synchronisé' };
+    return { ok: false, reason: t('match.special') };
   }
   // Ex. One Piece : "E1180" affiché pour le 25e épisode de la saison 24
   const isAbsolute = displayed !== null && episode.seasonEpisodeNumber !== null && displayed > episode.seasonEpisodeNumber;
@@ -222,9 +223,9 @@ export function resolveTarget(episode: EpisodeNumbers, candidates: MediaCandidat
       reason:
         linked.length === 0
           ? confidence === 'high'
-            ? 'Seule fiche AniList portant ce titre (saison 1)'
+            ? t('match.titleOnlyTrusted')
             : // Sans lien plateforme, c'est l'absence de lien (et non la règle appliquée) qui rend le choix incertain
-              'Fiche trouvée par son titre uniquement (aucun lien vers la plateforme sur AniList)'
+              t('match.titleOnly')
           : reason,
     },
   });
@@ -233,23 +234,23 @@ export function resolveTarget(episode: EpisodeNumbers, candidates: MediaCandidat
   if (pool.length === 1) {
     const only = pool[0];
     if (isAbsolute && displayed !== null && fits(only, displayed)) {
-      return target(only, displayed, displayed, 'displayed', level(true), 'Fiche unique, numérotation absolue');
+      return target(only, displayed, displayed, 'displayed', level(true), t('match.singleAbsolute'));
     }
     if (fits(only, relative)) {
       // Saison > 1 mais une seule fiche : la suite n'est peut-être pas liée sur AniList
       const isLaterSeason = !isAbsolute && (episode.seasonNumber ?? 1) > 1;
       return target(only, relative, relative, 'season', level(!isLaterSeason), isLaterSeason
-        ? `Saison ${episode.seasonNumber} mais une seule fiche AniList trouvée`
-        : 'Fiche unique');
+        ? t('match.singleLaterSeason', { season: episode.seasonNumber ?? '?' })
+        : t('match.single'));
     }
-    return { ok: false, reason: `Épisode ${displayed ?? relative} au-delà des ${only.episodes ?? '?'} épisodes de la fiche AniList` };
+    return { ok: false, reason: t('match.beyondAniList', { episode: displayed ?? relative, total: only.episodes ?? '?' }) };
   }
 
   // 2. Plusieurs saisons, numérotation absolue : répartition cumulative
   if (isAbsolute && displayed !== null) {
     const hit = walkSeasons(pool, 0, displayed);
     if (hit && fits(pool[hit.index], hit.progress)) {
-      return target(pool[hit.index], displayed, hit.progress, 'displayed', level(true), `Numérotation absolue répartie sur ${pool.length} fiches`);
+      return target(pool[hit.index], displayed, hit.progress, 'displayed', level(true), t('match.absoluteSplit', { count: pool.length }));
     }
   }
 
@@ -259,7 +260,7 @@ export function resolveTarget(episode: EpisodeNumbers, candidates: MediaCandidat
     const exact = pool.filter((c) => c.titles.some((t) => normalizeTitle(t) === seasonKey));
     const matches = exact.length > 0 ? exact : pool.filter((c) => c.titles.some((t) => normalizeTitle(t).includes(seasonKey)));
     if (matches.length === 1 && fits(matches[0], relative)) {
-      return target(matches[0], relative, relative, 'season', level(true), `Saison identifiée par son titre (« ${episode.seasonTitle} »)`);
+      return target(matches[0], relative, relative, 'season', level(true), t('match.seasonByTitle', { title: episode.seasonTitle ?? '' }));
     }
   }
 
@@ -270,10 +271,10 @@ export function resolveTarget(episode: EpisodeNumbers, candidates: MediaCandidat
     if (hit && fits(pool[hit.index], hit.progress)) {
       const isExact = hit.index === index;
       return target(pool[hit.index], relative, hit.progress, 'season', level(isExact), isExact
-        ? `Saison ${episode.seasonNumber} = ${index + 1}ᵉ fiche AniList`
-        : `Saison ${episode.seasonNumber} répartie sur plusieurs fiches AniList`);
+        ? t('match.seasonExact', { season: episode.seasonNumber, index: index + 1 })
+        : t('match.seasonSplit', { season: episode.seasonNumber }));
     }
   }
 
-  return { ok: false, reason: 'Impossible de déterminer la saison AniList correspondante' };
+  return { ok: false, reason: t('match.undetermined') };
 }

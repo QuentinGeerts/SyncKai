@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { chunk, computeWindow, filterNewEpisodes, planNotifications, trimNotified, type AiringItem } from './airing-policy';
+import { setLocale } from '../i18n';
+
+// Textes attendus en français
+setLocale('fr');
 
 const NOW = 1_800_000_000;
 const item = (scheduleId: number, mediaId: number, episode: number, title = `Série ${mediaId}`): AiringItem => ({

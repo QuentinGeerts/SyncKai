@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import type { EpisodeInfo } from '../../shared/episode.types';
 import { queueItemId, type SyncQueueItem } from '../../shared/queue.types';
 import type { SyncErrorCode, SyncOutcome } from '../../shared/sync.types';
@@ -45,7 +46,7 @@ export function classifyOutcome(outcome: SyncOutcome, requested: TrackerId[] | n
         r.outcome.status === 'error' ? [{ service: r.service, message: r.outcome.message, code: r.outcome.code }] : [],
       );
       if (errors.length === 0) return { kind: 'success' };
-      const message = errors.map((e) => `${TRACKER_LABELS[e.service]} : ${e.message}`).join(' · ');
+      const message = errors.map((e) => t('common.serviceMessage', { service: TRACKER_LABELS[e.service], message: e.message })).join(' · ');
       const retryable = errors.filter((e) => isRetryableCode(e.code));
       // Services en erreur définitive ignorés : seuls les échecs passagers sont relancés
       return retryable.length > 0

@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import type { AniListToken, AuthResult } from '../../shared/auth.types';
 import { saveToken } from '../../shared/storage';
 
@@ -25,21 +26,21 @@ export async function loginWithAniList(): Promise<AuthResult> {
 
     // Seul ce message correspond à une fermeture volontaire de la fenêtre par l'utilisateur
     if (/did not approve/i.test(message)) {
-      return { ok: false, code: 'USER_CANCELLED', message: 'Connexion annulée.' };
+      return { ok: false, code: 'USER_CANCELLED', message: t('auth.cancelled') };
     }
     // Page d'auth en erreur (client_id invalide, redirect_uri non enregistrée chez AniList…)
     if (/could not be loaded/i.test(message)) {
       return {
         ok: false,
         code: 'AUTH_FLOW_FAILED',
-        message: `AniList a rejeté la requête. Vérifie que la Redirect URL du client est : ${redirectUri}`,
+        message: t('auth.rejected.anilist', { url: redirectUri }),
       };
     }
-    return { ok: false, code: 'AUTH_FLOW_FAILED', message: `Échec de l’authentification : ${message}` };
+    return { ok: false, code: 'AUTH_FLOW_FAILED', message: t('auth.failed', { message }) };
   }
 
   if (!responseUrl) {
-    return { ok: false, code: 'INVALID_RESPONSE', message: 'Aucune réponse reçue d’AniList.' };
+    return { ok: false, code: 'INVALID_RESPONSE', message: t('auth.noResponse.anilist') };
   }
 
   // Implicit Grant : le token est dans le fragment (#access_token=...&expires_in=...).
@@ -49,14 +50,14 @@ export async function loginWithAniList(): Promise<AuthResult> {
   const error = fragment.get('error') ?? url.searchParams.get('error');
   if (error) {
     console.warn('[SyncKai] AniList a refusé l’accès :', error);
-    return { ok: false, code: 'ACCESS_DENIED', message: 'Accès refusé par AniList.' };
+    return { ok: false, code: 'ACCESS_DENIED', message: t('auth.denied', { service: 'AniList' }) };
   }
 
   const accessToken = fragment.get('access_token');
   const expiresIn = Number(fragment.get('expires_in'));
   if (!accessToken || !Number.isFinite(expiresIn) || expiresIn <= 0) {
     console.error('[SyncKai] Réponse OAuth invalide :', url.origin + url.pathname);
-    return { ok: false, code: 'INVALID_RESPONSE', message: 'Réponse d’AniList invalide.' };
+    return { ok: false, code: 'INVALID_RESPONSE', message: t('auth.invalidResponse.anilist') };
   }
 
   const token: AniListToken = { accessToken, expiresAt: Date.now() + expiresIn * 1000 };
@@ -64,7 +65,7 @@ export async function loginWithAniList(): Promise<AuthResult> {
     await saveToken(token);
   } catch (storageError: unknown) {
     console.error('[SyncKai] Échec de la sauvegarde du token :', storageError);
-    return { ok: false, code: 'UNKNOWN', message: 'Impossible de sauvegarder la session.' };
+    return { ok: false, code: 'UNKNOWN', message: t('auth.saveFailed') };
   }
 
   return { ok: true, data: null };

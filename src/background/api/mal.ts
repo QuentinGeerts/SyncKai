@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import { isRecord } from '../../shared/guards';
 import type { MalViewer, MalViewerResult } from '../../shared/mal.types';
 import { clearMalSession, saveCachedMalViewer } from '../../shared/storage';
@@ -65,7 +66,7 @@ interface RequestOptions {
 
 export async function malRequest<T>(path: string, isData: (data: unknown) => data is T, options: RequestOptions = {}): Promise<T> {
   const accessToken = await getMalAccessToken(options.refreshed === true);
-  if (!accessToken) throw new ApiError('NOT_AUTHENTICATED', 'Non connecté à MyAnimeList.');
+  if (!accessToken) throw new ApiError('NOT_AUTHENTICATED', t('api.notAuthenticated', { service: 'MyAnimeList' }));
 
   let response: Response;
   try {
@@ -78,14 +79,14 @@ export async function malRequest<T>(path: string, isData: (data: unknown) => dat
       body: options.body,
     });
   } catch {
-    throw new ApiError('NETWORK', 'MyAnimeList est injoignable. Vérifie ta connexion.');
+    throw new ApiError('NETWORK', t('api.network', { service: 'MyAnimeList' }));
   }
 
   if (response.status === 401) {
     // Token révoqué ou expiré plus tôt que prévu : un renouvellement, puis abandon
     if (!options.refreshed) return malRequest(path, isData, { ...options, refreshed: true });
     await clearMalSession();
-    throw new ApiError('TOKEN_INVALID', 'Session MyAnimeList expirée. Reconnecte-toi.');
+    throw new ApiError('TOKEN_INVALID', t('api.sessionExpired', { service: 'MyAnimeList' }));
   }
 
   if (response.status === 429) {
@@ -95,13 +96,13 @@ export async function malRequest<T>(path: string, isData: (data: unknown) => dat
       await sleep(delay);
       return malRequest(path, isData, { ...options, rateRetried: true });
     }
-    throw new ApiError('RATE_LIMITED', 'Trop de requêtes vers MyAnimeList. Réessaie dans une minute.');
+    throw new ApiError('RATE_LIMITED', t('api.rateLimited', { service: 'MyAnimeList' }));
   }
 
-  if (response.status === 404) throw new ApiError('API_ERROR', 'Fiche introuvable sur MyAnimeList.');
+  if (response.status === 404) throw new ApiError('API_ERROR', t('api.malNotFound'));
   if (!response.ok) {
     console.error('[SyncKai] Erreur API MyAnimeList :', response.status);
-    throw new ApiError('API_ERROR', `Erreur MyAnimeList (${response.status}).`);
+    throw new ApiError('API_ERROR', t('api.httpError', { service: 'MyAnimeList', status: response.status }));
   }
 
   let body: unknown = null;
@@ -112,7 +113,7 @@ export async function malRequest<T>(path: string, isData: (data: unknown) => dat
   }
   if (!isData(body)) {
     console.error('[SyncKai] Réponse MyAnimeList inattendue :', body);
-    throw new ApiError('INVALID_RESPONSE', 'Réponse de MyAnimeList inattendue.');
+    throw new ApiError('INVALID_RESPONSE', t('api.invalidResponse.mal'));
   }
   return body;
 }
@@ -143,7 +144,7 @@ export async function getMalViewer(): Promise<MalViewerResult> {
   } catch (error: unknown) {
     if (error instanceof ApiError) return { ok: false, code: error.code, message: error.message };
     console.error('[SyncKai] Erreur inattendue (getMalViewer) :', error);
-    return { ok: false, code: 'API_ERROR', message: 'Erreur inattendue lors du chargement du profil.' };
+    return { ok: false, code: 'API_ERROR', message: t('api.profileLoadFailed') };
   }
 }
 
@@ -171,7 +172,7 @@ export async function getMalAnime(malId: number): Promise<MalAnimeInfo> {
 async function patchMalListStatus(malId: number, body: URLSearchParams): Promise<ListEntryState> {
   const saved = await malRequest(`/anime/${malId}/my_list_status`, isRecord, { method: 'PATCH', body });
   const entry = parseMalListStatus(saved);
-  if (!entry) throw new ApiError('INVALID_RESPONSE', 'Réponse de MyAnimeList inattendue après la mise à jour.');
+  if (!entry) throw new ApiError('INVALID_RESPONSE', t('api.invalidAfterUpdate.mal'));
   return entry;
 }
 

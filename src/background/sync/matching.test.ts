@@ -13,6 +13,10 @@ import {
   type EpisodeNumbers,
   type MediaCandidate,
 } from './matching';
+import { setLocale } from '../../i18n';
+
+// Textes attendus en français
+setLocale('fr');
 
 function candidate(overrides: Partial<MediaCandidate> & Pick<MediaCandidate, 'id'>): MediaCandidate {
   return { format: 'TV', episodes: 12, startDate: null, titles: [], link: 'id', ...overrides };

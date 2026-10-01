@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import type { MediaRef } from '../../shared/engagement.types';
 import { sendMessage } from '../../shared/messages';
 import type { SyncOutcome } from '../../shared/sync.types';
@@ -9,7 +10,7 @@ import { ALERT_TOAST_MS, engagementResultToast, RATING_PROMPT_MS, REWATCH_PROMPT
 import { showToast, type ToastHandle } from './toast';
 
 const log = createLogger('prompt');
-const SW_UNREACHABLE: SyncOutcome = { status: 'error', message: 'SyncKai injoignable. Recharge la page puis réessaie.' };
+const swUnreachable = (): SyncOutcome => ({ status: 'error', message: t('content.unreachable.full') });
 
 /** Classes de la feuille du Shadow DOM du toast (voir STYLES dans toast.ts) */
 const STAR_CLASSES = { group: 'stars', row: 'stars-row', value: 'stars-value', star: 'star', outline: 'star-outline', fill: 'star-fill', half: 'star-half' };
@@ -19,7 +20,7 @@ async function send(run: () => Promise<SyncOutcome>): Promise<SyncOutcome> {
     return await run();
   } catch (error: unknown) {
     log.error('Service worker injoignable :', error);
-    return SW_UNREACHABLE;
+    return swUnreachable();
   }
 }
 
@@ -46,10 +47,10 @@ function showRatingPrompt(media: MediaRef): void {
 
   async function rate(value: number): Promise<void> {
     // Bulle « Enregistrement… » sans rappel de fermeture : un × pendant l'envoi ne reporte rien
-    handle.update({ tone: 'info', title: 'Enregistrement de la note…', message: media.title }, { variant: 'bubble' });
+    handle.update({ tone: 'info', title: t('prompt.rating.saving'), message: media.title }, { variant: 'bubble' });
     const outcome = await send(() => sendMessage('RATE_MEDIA', { media, score: value }));
     log.info('Résultat de la note :', outcome);
-    const result = engagementResultToast(outcome, { success: `Note ${formatScoreLabel(value)} enregistrée`, failure: 'Note non enregistrée', mediaTitle: media.title });
+    const result = engagementResultToast(outcome, { success: t('prompt.rating.saved', { score: formatScoreLabel(value) }), failure: t('prompt.rating.failed'), mediaTitle: media.title });
     if (result.ok) {
       settled = true;
       handle.update(result.content, { variant: result.variant, autoHideMs: result.autoHideMs });
@@ -57,7 +58,7 @@ function showRatingPrompt(media: MediaRef): void {
     }
     // Échec : « Réessayer » rouvre la notation ; sinon la note est reportée à la fermeture
     const action = {
-      label: 'Réessayer',
+      label: t('common.retry'),
       onClick: () => {
         settled = true;
         showRatingPrompt(media);
@@ -69,12 +70,12 @@ function showRatingPrompt(media: MediaRef): void {
   const handle: ToastHandle = showToast(
     {
       tone: 'info',
-      title: `« ${media.title} » terminé !`,
-      message: 'Ta note ?',
-      body: createStarRating({ label: `Noter ${media.title}`, classes: STAR_CLASSES, onConfirm: (value) => void rate(value) }),
+      title: t('prompt.rating.title', { title: media.title }),
+      message: t('prompt.rating.question'),
+      body: createStarRating({ label: t('rating.groupLabel', { title: media.title }), classes: STAR_CLASSES, onConfirm: (value) => void rate(value) }),
       actions: [
         {
-          label: 'Plus tard',
+          label: t('prompt.rating.later'),
           kind: 'ghost',
           onClick: () => {
             defer();
@@ -91,12 +92,12 @@ function showRatingPrompt(media: MediaRef): void {
 function showRewatchPrompt(media: MediaRef, progress: number): void {
   /** `target` : bulle à mettre à jour (une erreur affichée après un × ouvre un nouveau toast, d'où le paramètre) */
   async function start(target: ToastHandle): Promise<void> {
-    const saving = { tone: 'info', title: 'Revisionnage…', message: media.title } as const;
+    const saving = { tone: 'info', title: t('prompt.rewatch.saving'), message: media.title } as const;
     target.update(saving, { variant: 'bubble' });
     const outcome = await send(() => sendMessage('START_REWATCH', { media, progress }));
     log.info('Résultat du revisionnage :', outcome);
-    const result = engagementResultToast(outcome, { success: `Revisionnage · ép. ${progress}`, failure: 'Revisionnage non enregistré', mediaTitle: media.title });
-    const action = result.ok ? undefined : { label: 'Réessayer', onClick: () => void start(showToast(saving)) };
+    const result = engagementResultToast(outcome, { success: t('prompt.rewatch.saved', { progress }), failure: t('prompt.rewatch.failed'), mediaTitle: media.title });
+    const action = result.ok ? undefined : { label: t('common.retry'), onClick: () => void start(showToast(saving)) };
     target.update({ ...result.content, action }, { variant: result.variant, autoHideMs: result.autoHideMs });
   }
 
@@ -107,17 +108,17 @@ function showRewatchPrompt(media: MediaRef, progress: number): void {
       if (!result.ok) log.warn('Refus du revisionnage non enregistré :', result.message);
     } catch (error: unknown) {
       log.error('Service worker injoignable :', error);
-      showToast({ tone: 'error', title: 'SyncKai injoignable', message: 'Recharge la page puis réessaie.' }, { autoHideMs: ALERT_TOAST_MS });
+      showToast({ tone: 'error', title: t('content.unreachable.title'), message: t('content.unreachable.message') }, { autoHideMs: ALERT_TOAST_MS });
     }
   }
 
   const handle: ToastHandle = showToast(
     {
       tone: 'info',
-      title: `Tu revois « ${media.title} » ?`,
+      title: t('prompt.rewatch.title', { title: media.title }),
       actions: [
-        { label: 'Non', kind: 'ghost', onClick: () => void decline() },
-        { label: 'Oui, revisionnage', kind: 'primary', onClick: () => void start(handle) },
+        { label: t('prompt.rewatch.no'), kind: 'ghost', onClick: () => void decline() },
+        { label: t('prompt.rewatch.yes'), kind: 'primary', onClick: () => void start(handle) },
       ],
     },
     { variant: 'bubble', autoHideMs: REWATCH_PROMPT_MS },

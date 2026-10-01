@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import { isViewerQueryData, type AniListViewer, type ViewerResult } from '../../shared/anilist.types';
 import { saveCachedViewer } from '../../shared/storage';
 import { toSafeUrl } from '../../shared/url';
@@ -32,6 +33,6 @@ export async function getViewer(): Promise<ViewerResult> {
       return { ok: false, code: error.code, message: error.message };
     }
     console.error('[SyncKai] Erreur inattendue (getViewer) :', error);
-    return { ok: false, code: 'API_ERROR', message: 'Erreur inattendue lors du chargement du profil.' };
+    return { ok: false, code: 'API_ERROR', message: t('api.profileLoadFailed') };
   }
 }

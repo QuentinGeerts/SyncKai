@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "SyncKai",
+  "name": "__MSG_extName__",
+  "default_locale": "en",
   "version": "1.6.0",
-  "description": "Synchronise automatiquement tes animes (Crunchyroll, ADN) vers AniList et MyAnimeList.",
+  "description": "__MSG_extDescription__",
   "minimum_chrome_version": "116",
   "icons": {
     "16": "icons/icon-16.png",
@@ -51,7 +52,7 @@
       "suggested_key": {
         "default": "Alt+Shift+S"
       },
-      "description": "Valider l'épisode en cours"
+      "description": "__MSG_cmdCompleteEpisode__"
     }
   }
 }

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { describeOutcome } from './sync-feedback';
 import { failedServices, type SyncOutcome } from './sync.types';
+import { setLocale } from '../i18n';
+
+// Textes attendus en français
+setLocale('fr');
 
 describe('describeOutcome', () => {
   it('résume le résultat de chaque service', () => {

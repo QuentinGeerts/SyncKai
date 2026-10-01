@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import type { StreamingPlatform } from '../../shared/episode.types';
 import { isRecord } from '../../shared/guards';
 import type { RecentSync } from '../../shared/review.types';
@@ -246,6 +247,6 @@ export async function getWatchingList(service: TrackerId): Promise<WatchingResul
   } catch (error: unknown) {
     if (error instanceof ApiError) return { ok: false, code: error.code, message: error.message };
     console.error('[SyncKai] Erreur inattendue (getWatchingList) :', error);
-    return { ok: false, code: 'API_ERROR', message: 'Erreur inattendue lors du chargement de la liste.' };
+    return { ok: false, code: 'API_ERROR', message: t('api.listLoadFailed') };
   }
 }

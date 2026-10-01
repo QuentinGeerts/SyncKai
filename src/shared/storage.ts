@@ -9,8 +9,8 @@ import { SYNC_QUEUE_KEY } from './sync-queue-store';
 import { PENDING_RATINGS_KEY, REWATCH_DECLINED_KEY } from './engagement-store';
 import { isWatchingList, type WatchingList } from './watching.types';
 
-const MAX_PENDING_REVIEWS = 20;
-const MAX_RECENT_SYNCS = 5;
+export const MAX_PENDING_REVIEWS = 20;
+export const MAX_RECENT_SYNCS = 5;
 const STORAGE_LOCK = 'synckai:storage';
 
 /**

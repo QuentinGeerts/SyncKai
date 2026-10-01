@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import type { AuthResult } from '../../shared/auth.types';
 import { isRecord } from '../../shared/guards';
 import type { MalToken } from '../../shared/mal.types';
@@ -30,14 +31,14 @@ async function requestToken(params: Record<string, string>): Promise<MalToken> {
       body: new URLSearchParams({ client_id: MAL_CLIENT_ID, ...params }),
     });
   } catch {
-    throw new ApiError('NETWORK', 'MyAnimeList est injoignable. Vérifie ta connexion.');
+    throw new ApiError('NETWORK', t('api.network', { service: 'MyAnimeList' }));
   }
 
   // 400/401 : code expiré, refresh token révoqué… → une nouvelle connexion est nécessaire
   if (response.status === 400 || response.status === 401) {
-    throw new ApiError('TOKEN_INVALID', 'Session MyAnimeList expirée. Reconnecte-toi.');
+    throw new ApiError('TOKEN_INVALID', t('api.sessionExpired', { service: 'MyAnimeList' }));
   }
-  if (!response.ok) throw new ApiError('API_ERROR', `Erreur MyAnimeList (${response.status}).`);
+  if (!response.ok) throw new ApiError('API_ERROR', t('api.httpError', { service: 'MyAnimeList', status: response.status }));
 
   let body: unknown = null;
   try {
@@ -46,7 +47,7 @@ async function requestToken(params: Record<string, string>): Promise<MalToken> {
     // traité ci-dessous
   }
   const token = toMalToken(body);
-  if (!token) throw new ApiError('INVALID_RESPONSE', 'Réponse de MyAnimeList inattendue.');
+  if (!token) throw new ApiError('INVALID_RESPONSE', t('api.invalidResponse.mal'));
   return token;
 }
 
@@ -75,27 +76,27 @@ export async function loginWithMal(): Promise<AuthResult> {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     console.error('[SyncKai] Connexion MyAnimeList interrompue :', message, '| redirect_uri :', redirectUri);
-    if (/did not approve/i.test(message)) return { ok: false, code: 'USER_CANCELLED', message: 'Connexion annulée.' };
+    if (/did not approve/i.test(message)) return { ok: false, code: 'USER_CANCELLED', message: t('auth.cancelled') };
     if (/could not be loaded/i.test(message)) {
       return {
         ok: false,
         code: 'AUTH_FLOW_FAILED',
-        message: `MyAnimeList a rejeté la requête. Vérifie que l’App Redirect URL est : ${redirectUri}`,
+        message: t('auth.rejected.mal', { url: redirectUri }),
       };
     }
-    return { ok: false, code: 'AUTH_FLOW_FAILED', message: `Échec de l’authentification : ${message}` };
+    return { ok: false, code: 'AUTH_FLOW_FAILED', message: t('auth.failed', { message }) };
   }
-  if (!responseUrl) return { ok: false, code: 'INVALID_RESPONSE', message: 'Aucune réponse reçue de MyAnimeList.' };
+  if (!responseUrl) return { ok: false, code: 'INVALID_RESPONSE', message: t('auth.noResponse.mal') };
 
   const params = new URL(responseUrl).searchParams;
   if (params.get('error')) {
     console.warn('[SyncKai] MyAnimeList a refusé l’accès :', params.get('error'));
-    return { ok: false, code: 'ACCESS_DENIED', message: 'Accès refusé par MyAnimeList.' };
+    return { ok: false, code: 'ACCESS_DENIED', message: t('auth.denied', { service: 'MyAnimeList' }) };
   }
   const code = params.get('code');
   // "state" différent : réponse qui ne correspond pas à cette demande (CSRF) → rejetée
   if (!code || params.get('state') !== state) {
-    return { ok: false, code: 'INVALID_RESPONSE', message: 'Réponse de MyAnimeList invalide.' };
+    return { ok: false, code: 'INVALID_RESPONSE', message: t('auth.invalidResponse.mal') };
   }
 
   try {
@@ -104,7 +105,7 @@ export async function loginWithMal(): Promise<AuthResult> {
     return { ok: true, data: null };
   } catch (error: unknown) {
     console.error('[SyncKai] Échange du code MyAnimeList impossible :', error);
-    return { ok: false, code: 'UNKNOWN', message: error instanceof ApiError ? error.message : 'Impossible de finaliser la connexion.' };
+    return { ok: false, code: 'UNKNOWN', message: error instanceof ApiError ? error.message : t('auth.finalizeFailed') };
   }
 }
 

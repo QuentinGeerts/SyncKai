@@ -1,3 +1,4 @@
+import { lowerFirst, t } from '../i18n';
 import type { ServiceOutcome, ServiceResult, SyncOutcome } from './sync.types';
 import { TRACKER_LABELS } from './tracker.types';
 
@@ -13,13 +14,13 @@ export interface SyncFeedback {
 export function describeServiceOutcome(outcome: ServiceOutcome): string {
   switch (outcome.status) {
     case 'updated':
-      return outcome.completed ? `épisode ${outcome.progress}, anime terminé` : `épisode ${outcome.progress} enregistré`;
+      return t(outcome.completed ? 'feedback.service.completed' : 'feedback.service.updated', { progress: outcome.progress });
     case 'up-to-date':
-      return `déjà à jour (épisode ${outcome.progress})`;
+      return t('feedback.service.upToDate', { progress: outcome.progress });
     case 'skipped':
-      return outcome.reason.charAt(0).toLowerCase() + outcome.reason.slice(1);
+      return lowerFirst(outcome.reason);
     case 'error':
-      return `échec : ${outcome.message}`;
+      return t('feedback.service.error', { message: outcome.message });
   }
 }
 
@@ -37,27 +38,24 @@ export function describeOutcome(outcome: SyncOutcome): SyncFeedback {
       const isCompleted = outcome.results.some((r) => r.outcome.status === 'updated' && r.outcome.completed);
       return {
         tone: toneOf(outcome.results),
-        title: isCompleted ? `${outcome.mediaTitle} terminé !` : outcome.mediaTitle,
+        title: isCompleted ? t('feedback.completedTitle', { title: outcome.mediaTitle }) : outcome.mediaTitle,
         message:
-          outcome.results.map((r) => `${TRACKER_LABELS[r.service]} : ${describeServiceOutcome(r.outcome)}`).join(' · ') +
-          (outcome.queued ? '. Nouvel essai automatique bientôt.' : ''),
+          outcome.results
+            .map((r) => t('common.serviceMessage', { service: TRACKER_LABELS[r.service], message: describeServiceOutcome(r.outcome) }))
+            .join(' · ') + (outcome.queued ? t('feedback.queuedSuffix') : ''),
       };
     }
     case 'needs-review':
-      return {
-        tone: 'warning',
-        title: 'À vérifier dans SyncKai',
-        message: `${outcome.reason}. Clique sur l’icône SyncKai pour choisir la fiche.`,
-      };
+      return { tone: 'warning', title: t('feedback.review.title'), message: t('feedback.review.message', { reason: outcome.reason }) };
     case 'not-connected':
-      return { tone: 'warning', title: 'Aucun compte connecté', message: 'Clique sur l’icône SyncKai pour connecter AniList ou MyAnimeList.' };
+      return { tone: 'warning', title: t('feedback.notConnected.title'), message: t('feedback.notConnected.message') };
     case 'excluded':
-      return { tone: 'info', title: outcome.mediaTitle, message: 'Série exclue de la synchronisation.' };
+      return { tone: 'info', title: outcome.mediaTitle, message: t('feedback.excluded') };
     case 'error':
       return {
         tone: 'error',
-        title: 'Échec de la synchronisation',
-        message: outcome.queued ? `${outcome.message} Nouvel essai automatique bientôt.` : outcome.message,
+        title: t('feedback.error.title'),
+        message: outcome.queued ? t('feedback.error.queued', { message: outcome.message }) : outcome.message,
       };
   }
 }

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { decideAdjustment } from './controls';
+import { setLocale } from '../i18n';
+
+// Textes attendus en français
+setLocale('fr');
 
 describe('decideAdjustment', () => {
   it('+1 avance et passe en cours', () => {

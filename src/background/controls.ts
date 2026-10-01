@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import type { ContentMessage } from '../shared/content-messages';
 import type { AdjustProgressPayload } from '../shared/messages';
 import type { ServiceOutcome, ServiceResult, SyncOutcome } from '../shared/sync.types';
@@ -25,8 +26,8 @@ export type AdjustDecision =
  */
 export function decideAdjustment(entry: ListEntryState | null, total: number | null, delta: 1 | -1): AdjustDecision {
   const current = entry?.progress ?? 0;
-  if (delta === -1 && current <= 0) return { action: 'skip', reason: 'Aucun épisode à retirer' };
-  if (delta === 1 && total !== null && current >= total) return { action: 'skip', reason: 'Déjà au dernier épisode' };
+  if (delta === -1 && current <= 0) return { action: 'skip', reason: t('controls.nothingToRemove') };
+  if (delta === 1 && total !== null && current >= total) return { action: 'skip', reason: t('controls.alreadyLast') };
   const progress = Math.max(0, current + delta);
   if (total !== null && progress >= total) return { action: 'write', progress, status: 'COMPLETED' };
   // Revisionnage en cours : il continue ; −1 sur une entrée terminée la repasse « en cours »
@@ -50,7 +51,7 @@ async function adjustOnService(tracker: TrackerService, id: number, fallbackTota
   } catch (error: unknown) {
     console.error(LOG_PREFIX, `${label} : échec de l’ajustement`, error);
     const outcome: ServiceOutcome =
-      error instanceof ApiError ? { status: 'error', message: error.message, code: error.code } : { status: 'error', message: 'Erreur inattendue.' };
+      error instanceof ApiError ? { status: 'error', message: error.message, code: error.code } : { status: 'error', message: t('error.unexpected') };
     return { result: { service: tracker.id, outcome }, title: null };
   }
 }
@@ -70,15 +71,15 @@ export async function adjustProgress(payload: AdjustProgressPayload): Promise<Sy
       const id = catalog ? tracker.resolveId(catalog) : tracker.id === 'mal' ? payload.malId : null;
       return id !== null ? [{ tracker, id }] : [];
     });
-    if (targets.length === 0) return { status: 'error', message: 'Aucun service connecté ne suit cette série.' };
+    if (targets.length === 0) return { status: 'error', message: t('sync.noServiceFollows') };
 
     const adjusted = await Promise.all(targets.map(({ tracker, id }) => adjustOnService(tracker, id, catalog?.episodes ?? null, payload.delta)));
-    const mediaTitle = catalog?.title ?? adjusted.find((a) => a.title !== null)?.title ?? 'Série';
+    const mediaTitle = catalog?.title ?? adjusted.find((a) => a.title !== null)?.title ?? t('sync.seriesFallback');
     return { status: 'synced', mediaTitle, results: adjusted.map((a) => a.result) };
   } catch (error: unknown) {
     if (error instanceof ApiError) return { status: 'error', message: error.message, code: error.code };
     console.error(LOG_PREFIX, 'Erreur inattendue :', error);
-    return { status: 'error', message: 'Erreur inattendue pendant l’ajustement.' };
+    return { status: 'error', message: t('error.unexpectedAdjust') };
   }
 }
 

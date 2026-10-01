@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import type { PendingReview } from '../../shared/review.types';
 import { h } from '../../ui/dom';
 import { icon } from '../../ui/icons';
@@ -21,7 +22,7 @@ export function createReviewSection(actions: ReviewActions): ReviewSection {
     'div',
     { class: `${CARD} flex items-center gap-2 p-3 text-[12px] text-muted` },
     icon('check', 'h-3.5 w-3.5 text-mint', '3'),
-    'Rien à vérifier pour le moment.',
+    t('review.empty'),
   );
   const element = h(
     'section',
@@ -35,7 +36,7 @@ export function createReviewSection(actions: ReviewActions): ReviewSection {
   let lastReviews: PendingReview[] = [];
 
   function refreshChrome(): void {
-    title.textContent = `À vérifier (${pendingCount})`;
+    title.textContent = t('review.title', { count: pendingCount });
     empty.hidden = cards.size > 0;
   }
 

@@ -1,3 +1,4 @@
+import { lowerFirst, t } from '../../i18n';
 import type { NotificationLevel } from '../../shared/settings';
 import { describeOutcome, describeServiceOutcome } from '../../shared/sync-feedback';
 import type { ServiceOutcome, ServiceResult, SyncOutcome } from '../../shared/sync.types';
@@ -39,11 +40,11 @@ export function pillForOutcome(outcome: SyncOutcome): ToastContent {
   if (outcome.status !== 'synced') return { ...describeOutcome(outcome) };
   const updated = outcome.results.find((r) => r.outcome.status === 'updated')?.outcome;
   if (updated?.status === 'updated') {
-    return { tone: 'success', title: `Ép. ${updated.progress} enregistré`, message: outcome.mediaTitle };
+    return { tone: 'success', title: t('toast.pill.saved', { episode: updated.progress }), message: outcome.mediaTitle };
   }
   // Aucun service modifié (tout déjà à jour) : on le dit sans inventer d'écriture
   const upToDate = outcome.results.find((r) => r.outcome.status === 'up-to-date')?.outcome;
-  const title = upToDate?.status === 'up-to-date' ? `Ép. ${upToDate.progress} déjà à jour` : 'Déjà à jour';
+  const title = upToDate?.status === 'up-to-date' ? t('toast.pill.upToDate', { episode: upToDate.progress }) : t('toast.pill.alreadyUpToDate');
   return { tone: 'success', title, message: outcome.mediaTitle };
 }
 
@@ -92,11 +93,11 @@ function engagementLine(result: ServiceResult): ToastLine {
   switch (outcome.status) {
     case 'updated':
     case 'up-to-date':
-      return { label, text: 'enregistré', tone: 'ok' };
+      return { label, text: t('toast.line.saved'), tone: 'ok' };
     case 'skipped':
-      return { label, text: outcome.reason.charAt(0).toLowerCase() + outcome.reason.slice(1), tone: 'warning' };
+      return { label, text: lowerFirst(outcome.reason), tone: 'warning' };
     case 'error':
-      return { label, text: `échec : ${outcome.message}`, tone: 'error' };
+      return { label, text: t('feedback.service.error', { message: outcome.message }), tone: 'error' };
   }
 }
 
