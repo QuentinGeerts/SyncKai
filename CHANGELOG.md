@@ -141,6 +141,7 @@ Première version : synchronisation automatique Crunchyroll → AniList.
 - **Vérification manuelle** des correspondances incertaines depuis le popup (fiches suggérées, recherche, numéro d'épisode), avec badge sur l'icône de l'extension.
 - **Dernières synchros** dans le popup, avec correction a posteriori d'une correspondance.
 
+[1.7.0]: https://github.com/QuentinGeerts/SyncKai/releases/tag/v1.7.0
 [1.6.0]: https://github.com/QuentinGeerts/SyncKai/releases/tag/v1.6.0
 [1.5.0]: https://github.com/QuentinGeerts/SyncKai/releases/tag/v1.5.0
 [1.4.0]: https://github.com/QuentinGeerts/SyncKai/releases/tag/v1.4.0
