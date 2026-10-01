@@ -1,0 +1,227 @@
+/* Composition 1280×800 d'une capture du Chrome Web Store */
+@import '@fontsource/nunito/latin-600.css';
+@import '@fontsource/nunito/latin-700.css';
+@import '@fontsource/m-plus-rounded-1c/latin-800.css';
+
+:root {
+  --navy-1: #2a3590;
+  --navy-2: #1f2a66;
+  --navy-3: #141a3d;
+  --night: #120e2c;
+  --violet: #7c5cff;
+  --cyan: #46d6ff;
+  --ink: #f4effa;
+  --muted: #c3bce0;
+  --sakura: #ff8fb8;
+  --surface: #211c2e;
+  --line: #3d3554;
+}
+
+html,
+body {
+  margin: 0;
+  width: 1280px;
+  height: 800px;
+  overflow: hidden;
+  background: var(--navy-3);
+}
+
+.canvas {
+  position: relative;
+  width: 1280px;
+  height: 800px;
+  overflow: hidden;
+  font-family: 'Nunito', system-ui, sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(620px 520px at 26% 46%, rgba(124, 92, 255, 0.3), transparent 70%),
+    radial-gradient(560px 480px at 84% 70%, rgba(70, 214, 255, 0.12), transparent 70%),
+    radial-gradient(900px 700px at 20% 10%, var(--navy-1) 0%, var(--navy-2) 45%, var(--navy-3) 80%),
+    var(--night);
+}
+/* Voile nuit violet vers le bas */
+.canvas::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(170deg, transparent 40%, rgba(30, 14, 60, 0.55) 100%);
+  pointer-events: none;
+}
+.canvas > * {
+  position: absolute;
+  z-index: 1;
+}
+
+/* ─── Texte ─────────────────────────────────────────────── */
+.lockup {
+  left: 72px;
+  top: 52px;
+  height: 52px;
+}
+.copy {
+  left: 72px;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 22px;
+}
+.eyebrow {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 16px 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(185, 164, 255, 0.35);
+  background: rgba(20, 26, 61, 0.55);
+  font: 700 18px/1 'Nunito', sans-serif;
+  color: #dcd3ff;
+}
+.eyebrow::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #b9a4ff, #5fe3ff);
+  box-shadow: 0 0 12px rgba(95, 227, 255, 0.7);
+}
+.headline {
+  margin: 0;
+  font: 800 56px/1.12 'M PLUS Rounded 1c', sans-serif;
+  letter-spacing: -0.5px;
+  color: #fff;
+  text-wrap: balance;
+}
+.compact .headline {
+  font-size: 52px;
+}
+.accent {
+  background: linear-gradient(100deg, #c7b6ff 0%, #8fa4ff 45%, #5fe3ff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.sub {
+  margin: 0;
+  font: 600 21px/1.45 'Nunito', sans-serif;
+  color: var(--muted);
+  text-wrap: pretty;
+}
+
+/* ─── Barre d'outils du navigateur ─────────────────────── */
+.toolbar {
+  height: 48px;
+  border-radius: 14px;
+  background: #1c1830;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 14px 0 18px;
+  box-sizing: border-box;
+}
+.dots {
+  display: flex;
+  gap: 7px;
+}
+.dots i {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #3d3554;
+}
+.omnibox {
+  flex: 1;
+  height: 30px;
+  border-radius: 999px;
+  background: #110e20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+}
+.omnibox b {
+  display: block;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.16);
+}
+.ext {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8f86ab;
+}
+.ext svg {
+  width: 18px;
+  height: 18px;
+}
+.ext.kai {
+  background: rgba(185, 164, 255, 0.22);
+  box-shadow: inset 0 0 0 1.5px rgba(185, 164, 255, 0.55);
+}
+.ext.kai img {
+  width: 22px;
+  height: 22px;
+}
+.badge {
+  position: absolute;
+  right: -3px;
+  bottom: -2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  background: #f59e0b;
+  color: #1a0f1c;
+  font: 800 11px/16px 'Nunito', sans-serif;
+  text-align: center;
+}
+
+/* ─── Popup et encarts ─────────────────────────────────── */
+.frame {
+  border: 0;
+  display: block;
+  background: #16131f;
+}
+.window {
+  border-radius: 14px;
+  overflow: hidden;
+  outline: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 30px 80px rgba(4, 3, 18, 0.65),
+    0 8px 24px rgba(0, 0, 0, 0.35);
+  background: #16131f;
+}
+.caret {
+  width: 18px;
+  height: 18px;
+  background: #16131f;
+  transform: rotate(45deg);
+  border-radius: 3px;
+  outline: 1px solid rgba(255, 255, 255, 0.12);
+}
+.callout-label {
+  font: 700 18px/1 'Nunito', sans-serif;
+  color: var(--muted);
+}
+
+/* ─── Lecteur ──────────────────────────────────────────── */
+.player {
+  border-radius: 16px;
+  overflow: hidden;
+  outline: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 30px 80px rgba(4, 3, 18, 0.65),
+    0 8px 24px rgba(0, 0, 0, 0.35);
+  background: #07060f;
+}

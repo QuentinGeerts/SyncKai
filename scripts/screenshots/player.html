@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>SyncKai player (screenshots)</title>
+    <link rel="stylesheet" href="./player.css" />
+  </head>
+  <body>
+    <div class="scene" aria-hidden="true">
+      <div class="sky"></div>
+      <div class="bokeh"></div>
+      <svg class="hills" viewBox="0 0 800 450" preserveAspectRatio="none">
+        <path d="M0 330 C120 290 210 320 300 300 S480 250 560 285 S720 300 800 270 V450 H0Z" fill="#120f2a" />
+        <path d="M0 380 C140 350 260 372 380 352 S600 330 800 350 V450 H0Z" fill="#0b0a1c" />
+      </svg>
+      <div class="dim"></div>
+    </div>
+    <div class="credits" aria-hidden="true">
+      <p class="credits-title" id="credits-title"></p>
+      <ul id="credits-lines"></ul>
+    </div>
+    <div class="top">
+      <span class="ep" id="ep-title"></span>
+    </div>
+    <div class="controls" aria-hidden="true">
+      <div class="bar"><div class="bar-fill"></div><div class="bar-knob"></div></div>
+      <div class="row">
+        <svg viewBox="0 0 24 24"><path d="M7 5h3v14H7zM14 5h3v14h-3z" fill="currentColor" /></svg>
+        <svg viewBox="0 0 24 24"><path d="M6 6l8 6-8 6zM16 6h2.5v12H16z" fill="currentColor" /></svg>
+        <svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor" /><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+        <span class="time" id="time"></span>
+        <span class="grow"></span>
+        <svg viewBox="0 0 24 24"><path d="M19.4 13a7.5 7.5 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.6 7.6 0 0 0-1.7-1L15 3h-4l-.3 2.6a7.6 7.6 0 0 0-1.7 1l-2.4-1-2 3.4L6.6 11a7.5 7.5 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7.6 7.6 0 0 0 1.7 1L11 21h4l.3-2.6a7.6 7.6 0 0 0 1.7-1l2.4 1 2-3.4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" /><circle cx="13" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8" /></svg>
+        <svg viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+      </div>
+    </div>
+    <script type="module" src="./player-frame.ts"></script>
+  </body>
+</html>
