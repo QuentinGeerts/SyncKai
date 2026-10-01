@@ -1,73 +1,119 @@
-# SyncKai
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/kai-lockup-dark.svg">
+    <img src="assets/brand/kai-lockup-light.svg" alt="SyncKai" width="420">
+  </picture>
+</p>
 
-Extension de navigateur (Manifest V3) qui détecte les épisodes regardés sur Crunchyroll et ADN, et met à jour automatiquement tes listes **AniList** et/ou **MyAnimeList**, sans action manuelle.
+<p align="center">Regarde tes animes sur Crunchyroll ou ADN : ta liste AniList / MyAnimeList se met à jour toute seule au générique.</p>
+
+<p align="center">
+  <a href="https://github.com/QuentinGeerts/SyncKai/releases"><img alt="Version" src="https://img.shields.io/github/v/release/QuentinGeerts/SyncKai?label=version"></a>
+  <a href="LICENSE"><img alt="Licence MIT" src="https://img.shields.io/badge/licence-MIT-blue.svg"></a>
+</p>
+
+<!-- capture : popup, onglet « En cours » -->
 
 ## Fonctionnalités
 
-- Connexion à AniList et/ou MyAnimeList en un clic depuis le popup (chaque compte est facultatif).
-- Détection de l'épisode en cours sur Crunchyroll et ADN (Animation Digital Network), y compris lors du passage à l'épisode suivant.
-- Synchronisation au début du générique de fin quand la plateforme le fournit (Crunchyroll), sinon à un pourcentage réglable (85 % par défaut).
-- Toast de confirmation directement sur la page, même en plein écran.
-- Choix manuel de la fiche AniList quand la correspondance est incertaine, et correction des dernières synchros.
-- Popup en trois écrans : **En cours** (séries en cours, prochain épisode, bouton « Ouvrir » vers Crunchyroll/ADN), **Activité** (vérifications et dernières synchros) et **Réglages** (comptes, lecteur préféré, pause, mode de déclenchement, notifications, correspondances mémorisées).
+- **Synchro automatique au générique de fin** : l’épisode est marqué comme vu dès le début du générique (Crunchyroll), sinon à un pourcentage réglable (85 % par défaut).
+- **AniList et MyAnimeList**, ensemble ou séparément : chaque compte est facultatif.
+- **Reconnaissance intelligente des saisons** : numérotation absolue (One Piece E1180) ou par saison, saisons découpées en plusieurs fiches. En cas de doute, une carte **À vérifier** te laisse choisir la bonne fiche.
+- **En cours** : tes séries avec le prochain épisode (« Ép. 5 dans 18 h », « Ép. 3 disponible »), triables par prochaine sortie, dernière mise à jour, titre ou épisodes restants.
+- **Ouvrir** une série directement sur Crunchyroll ou ADN, selon ton **lecteur préféré**.
+- **Notifications sur la page** à trois niveaux : *Discrètes*, *Détaillées*, *Alertes seulement*. Compatibles plein écran.
+- **File de synchro hors ligne** : en cas de coupure réseau ou de service indisponible, la synchro est relancée automatiquement.
+- **+1 / −1** sur chaque série, et raccourci **Alt+Maj+S** pour valider l’épisode en cours.
+- **Exclusion par série** : « Ne plus synchroniser cette série », réactivable à tout moment.
+- **Note en fin de série** : une bulle « Ta note ? » quand une série passe en Terminé.
+- **Revisionnage** : SyncKai le détecte sur une série terminée et le propose.
+- **Alertes de nouveaux épisodes** : notification à la sortie d’un épisode de tes séries en cours.
+- **Sauvegarde** : export / import de tes réglages, correspondances et historique (jamais de tes connexions).
+- **Interface en français, anglais et allemand.**
 
-Plateformes prises en charge : Crunchyroll, ADN. Services de suivi : AniList, MyAnimeList.
+<!-- capture : bulle de synchronisation sur Crunchyroll -->
+<!-- capture : carte « À vérifier » -->
 
-## Installation (développement)
+## Plateformes et services pris en charge
 
-Prérequis : Node.js 20+ et Chrome (ou un navigateur Chromium).
+| Plateformes de streaming | Fin d’épisode détectée | | Services de suivi |
+| --- | --- | --- | --- |
+| [Crunchyroll](https://www.crunchyroll.com) | Début du générique (repli au pourcentage) | | [AniList](https://anilist.co) |
+| [ADN](https://animationdigitalnetwork.com) | Pourcentage réglable | | [MyAnimeList](https://myanimelist.net) |
+
+Navigateur : Chrome 116 ou plus récent (et navigateurs basés sur Chromium).
+
+## Installation
+
+### Chrome Web Store (recommandé)
+
+[Installer SyncKai depuis le Chrome Web Store](https://chromewebstore.google.com/detail/<bientôt>) *(bientôt disponible)*.
+
+### Installation manuelle
+
+1. Télécharge le fichier `.zip` de la dernière version sur la page [Releases](https://github.com/QuentinGeerts/SyncKai/releases) et décompresse-le.
+2. Ouvre `chrome://extensions` et active le **mode développeur** (en haut à droite).
+3. Clique sur **Charger l’extension non empaquetée** et sélectionne le dossier décompressé.
+
+## Prise en main
+
+1. **Connecte ton compte** : clique sur l’icône SyncKai, puis sur *Connecter AniList* et/ou *Connecter MyAnimeList*.
+2. **Regarde un épisode** sur Crunchyroll ou ADN, comme d’habitude.
+3. **Vérifie le popup** : l’épisode apparaît dans *Activité › Dernières synchros*, et ta série dans *En cours*. Si une carte *À vérifier* s’affiche, choisis la bonne fiche une fois : SyncKai s’en souvient pour la suite.
+
+<!-- capture : écran de premier lancement -->
+
+## FAQ
+
+**Mon épisode n’a pas été synchronisé.**
+Regarde d’abord la barre d’état du popup : élément à vérifier, synchro en attente ou session expirée (« Reconnecter »). Vérifie aussi que la synchro automatique n’est pas en pause et que la série n’est pas exclue (Réglages). Après une mise à jour de l’extension, recharge l’onglet du lecteur. En dernier recours, `Alt+Maj+S` valide l’épisode en cours.
+
+**SyncKai a choisi la mauvaise saison.**
+Dans *Activité › Dernières synchros*, clique sur **Corriger** et choisis la bonne fiche. Tu peux aussi « Oublier » une correspondance dans *Réglages › Correspondances* : elle sera recalculée au prochain épisode. Pense à corriger la progression enregistrée par erreur (bouton −1 dans *En cours*).
+
+**Je ne vois pas les notifications en plein écran.**
+C’est voulu en mode *Discrètes* (par défaut) : rien en plein écran, une coche apparaît sur l’icône de l’extension. Choisis *Détaillées* dans *Réglages › Notifications sur la page* pour voir la bulle complète. Les alertes (à vérifier, erreur, reconnexion) s’affichent toujours.
+
+**Que deviennent mes données ?**
+Rien ne passe par un serveur SyncKai : tout reste dans ton navigateur et seules les API AniList et MyAnimeList sont contactées. Détails dans la [politique de confidentialité](PRIVACY.md).
+
+## Confidentialité
+
+Pas de serveur, pas de statistiques d’usage, pas de publicité. Voir [PRIVACY.md](PRIVACY.md) (français, English, Deutsch).
+
+## Contribuer
+
+Les signalements de bugs et suggestions sont les bienvenus dans les [issues](https://github.com/QuentinGeerts/SyncKai/issues).
+
+Prérequis : Node.js 20+ et Chrome.
 
 ```bash
-npm install
-npm run build
+npm install       # dépendances
+npm run dev       # build de développement (Vite + @crxjs/vite-plugin)
+npm run build     # vérification TypeScript + build dans dist/
+npm test          # tests unitaires (Vitest)
 ```
 
-Puis dans `chrome://extensions` : activer le **mode développeur**, cliquer sur **Charger l'extension non empaquetée** et sélectionner le dossier `dist/`.
+Charge ensuite le dossier `dist/` via **Charger l’extension non empaquetée**. Pour empaqueter une version (zip prêt pour le Chrome Web Store, sans la clé `key`), lance `npm run package` : le fichier est créé dans `release/`. Les informations de publication sur le Chrome Web Store sont dans [docs/STORE.md](docs/STORE.md).
 
-### Configuration AniList
+**Traductions** : les textes de l’interface sont dans `src/i18n/locales/` (`fr.json`, `en.json`, `de.json`), et le nom / la description de l’extension dans `public/_locales/`. Une plateforme de traduction collaborative (Weblate) est prévue ; d’ici là, les contributions passent par une pull request.
 
-L'extension utilise un client OAuth AniList (Implicit Grant). Sa **Redirect URL** doit être exactement :
+## Licence
 
-```
-https://pchgepnbifepbhcjhkaflnjnejodlneh.chromiumapp.org/
-```
+[MIT](LICENSE) © 2026 Quentin Geerts
 
-### Configuration MyAnimeList
+SyncKai n’est affilié ni à Crunchyroll, ni à ADN, ni à AniList, ni à MyAnimeList.
 
-Client MAL de type **other** (client public : Authorization Code + PKCE, aucun secret embarqué), avec la même **App Redirect URL** que ci-dessus.
+---
 
-La correspondance des fiches passe toujours par le catalogue AniList (API publique, sans compte), puis par l'identifiant MAL de la fiche (`idMal`).
+## In English
 
-Cet identifiant d'extension est fixé par la clé publique `key` du `manifest.json` : il est identique sur toutes les machines.
+**SyncKai** is a Chrome extension that automatically updates your **AniList** and/or **MyAnimeList** list while you watch anime on **Crunchyroll** or **ADN**: the episode is marked as watched when the ending credits start (or at an adjustable percentage).
 
-## Scripts
+- Smart season matching, with review cards when a match is uncertain.
+- “Watching” list with next-episode countdown, sorting and an “Open” button for your preferred player.
+- Offline retry queue, +1 / −1, `Alt+Shift+S` shortcut, per-series exclusion.
+- Rating prompt at series end, rewatch detection, new-episode alerts, backup export / import.
+- Interface in French, English and German.
 
-| Commande | Rôle |
-| --- | --- |
-| `npm run build` | Vérification TypeScript puis build de l'extension dans `dist/` |
-| `npm run dev` | Build en mode développement (Vite + `@crxjs/vite-plugin`) |
-| `npm test` | Tests unitaires (Vitest) |
-| `npm run icons` | Régénère les icônes PNG dans `public/icons/` |
-
-## Architecture
-
-```
-src/
-  background/   Service worker : OAuth (AniList, MAL), API, résolution des correspondances, synchronisation
-                (trackers/ : un adapter par service de suivi)
-  content/      Content script : adapters par plateforme, suivi de la vidéo, toast
-  popup/        Popup (TypeScript + Tailwind CSS) : En cours, Activité (vérifications, dernières synchros), Réglages
-  ui/           Helpers DOM et icônes du popup
-  shared/       Types, messages typés, réglages et accès au stockage communs
-scripts/        Outils de développement (génération des icônes)
-```
-
-- **Pattern Adapter** : chaque plateforme implémente `StreamingAdapter` (`src/content/adapters/`).
-- Le service worker ne se réveille que pour l'authentification et les requêtes réseau vers AniList.
-- Les messages entre contextes sont typés et validés (`src/shared/messages.ts`).
-
-## Débogage
-
-- Console de la page Crunchyroll : logs `[SyncKai:…]`, dont l'horodatage du build au chargement.
-- Console du service worker (`chrome://extensions` → « service worker ») : logs `[SyncKai:sync]` avec les fiches candidates et le choix effectué.
-- Après un rechargement de l'extension, recharger l'onglet Crunchyroll : l'ancien script reste sinon actif.
+Install from the [Chrome Web Store](https://chromewebstore.google.com/detail/<bientôt>) (coming soon) or manually from the [Releases](https://github.com/QuentinGeerts/SyncKai/releases) zip. No server, no analytics: see the [privacy policy](PRIVACY.md). Licensed under [MIT](LICENSE).

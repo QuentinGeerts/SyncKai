@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <title>SyncKai – Kai (16, redessiné)</title>
+  <!-- Dessin dédié 16 px, pleine tuile (barre d’outils 1x) -->
+  <rect width="16" height="16" rx="3.6" fill="#1F2A66"/>
+  <path d="M4.3 6.6 C2.5 5.6 2.2 3.6 3.9 2.7 L5 2.5" fill="none" stroke="#46D6FF" stroke-width="1.6" stroke-linecap="round"/>
+  <path d="M4.8 1.1 L7.3 2.5 L4.9 3.9 Z" fill="#46D6FF"/>
+  <path d="M11.7 6.6 C13.5 5.6 13.8 3.8 12.2 3 L11.1 2.9" fill="none" stroke="#9A82FF" stroke-width="1.6" stroke-linecap="round"/>
+  <path d="M11.3 1.5 L8.8 2.9 L11.2 4.3 Z" fill="#9A82FF"/>
+  <ellipse cx="8" cy="9.7" rx="6.5" ry="5.1" fill="#F4F6FF"/>
+  <ellipse cx="8" cy="9.9" rx="4.9" ry="3.7" fill="#121633"/>
+  <rect x="5.2" y="8.6" width="1.6" height="2.4" rx="0.8" fill="#5FE3FF"/>
+  <rect x="9.2" y="8.6" width="1.6" height="2.4" rx="0.8" fill="#5FE3FF"/>
+</svg>

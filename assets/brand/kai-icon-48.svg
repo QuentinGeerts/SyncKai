@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <title>SyncKai – Kai (48, détail réduit)</title>
+  <!-- Tuile 320×320 réduite à 96×96 (×0,3), centrée : 16 px de marge transparente (recommandation Chrome Web Store) -->
+  <g transform="translate(16 16) scale(0.3)">
+    <defs>
+      <radialGradient id="kai48-T" cx="160" cy="140" r="210" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stop-color="#2A3590"/>
+        <stop offset="0.5" stop-color="#1F2A66"/>
+        <stop offset="1" stop-color="#141A3D"/>
+      </radialGradient>
+      <radialGradient id="kai48-G" cx="160" cy="180" r="150" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stop-color="#7C5CFF" stop-opacity="0.5"/>
+        <stop offset="0.6" stop-color="#5B6BFF" stop-opacity="0.14"/>
+        <stop offset="1" stop-color="#46D6FF" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="kai48-H" cx="132" cy="132" r="180" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stop-color="#FFFFFF"/>
+        <stop offset="0.42" stop-color="#F4F6FF"/>
+        <stop offset="0.78" stop-color="#DDE1FA"/>
+        <stop offset="1" stop-color="#C9CFF5"/>
+      </radialGradient>
+      <radialGradient id="kai48-V" cx="150" cy="170" r="110" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stop-color="#20275F"/>
+        <stop offset="0.6" stop-color="#121633"/>
+        <stop offset="1" stop-color="#0A0D24"/>
+      </radialGradient>
+      <linearGradient id="kai48-E" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#C8F8FF"/>
+        <stop offset="0.45" stop-color="#5FE3FF"/>
+        <stop offset="1" stop-color="#2E9BF0"/>
+      </linearGradient>
+      <linearGradient id="kai48-L" x1="72" y1="146" x2="118" y2="44" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stop-color="#7C5CFF"/>
+        <stop offset="1" stop-color="#46D6FF"/>
+      </linearGradient>
+      <linearGradient id="kai48-R" x1="248" y1="146" x2="206" y2="62" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stop-color="#46D6FF"/>
+        <stop offset="1" stop-color="#7C5CFF"/>
+      </linearGradient>
+      <linearGradient id="kai48-B" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#5FE3FF"/>
+        <stop offset="1" stop-color="#5A6BFF"/>
+      </linearGradient>
+    </defs>
+    <rect width="320" height="320" rx="60" fill="url(#kai48-T)"/>
+    <rect width="320" height="320" rx="60" fill="url(#kai48-G)"/>
+    <path d="M76 146 C40 122 32 86 54 62 C68 47 86 44 100 46" fill="none" stroke="url(#kai48-L)" stroke-width="24" stroke-linecap="round"/>
+    <path d="M96 22 L132 47 L98 72 Z" fill="#46D6FF" stroke="#46D6FF" stroke-width="6" stroke-linejoin="round"/>
+    <path d="M244 146 C282 124 290 98 276 80 C264 64 246 60 230 62" fill="none" stroke="url(#kai48-R)" stroke-width="24" stroke-linecap="round"/>
+    <path d="M234 37 L196 64 L232 89 Z" fill="#8A6BFF" stroke="#8A6BFF" stroke-width="6" stroke-linejoin="round"/>
+    <ellipse cx="160" cy="282" rx="66" ry="16" fill="#C9CFF5"/>
+    <path d="M160 98 C234 98 280 134 280 188 C280 242 234 278 160 278 C86 278 40 242 40 188 C40 134 86 98 160 98 Z" fill="url(#kai48-H)"/>
+    <ellipse cx="46" cy="192" rx="20" ry="36" fill="#E3E7FC" stroke="#B9C1F0" stroke-width="3"/>
+    <ellipse cx="39" cy="192" rx="12" ry="25" fill="#1A2160" stroke="#5FE3FF" stroke-width="6"/>
+    <ellipse cx="274" cy="192" rx="20" ry="36" fill="#E3E7FC" stroke="#B9C1F0" stroke-width="3"/>
+    <ellipse cx="281" cy="192" rx="12" ry="25" fill="#1A2160" stroke="#5FE3FF" stroke-width="6"/>
+    <path d="M160 126 C216 126 252 150 252 192 C252 234 216 260 160 260 C104 260 68 234 68 192 C68 150 104 126 160 126 Z" fill="url(#kai48-V)" stroke="#3D4FC4" stroke-opacity="0.75" stroke-width="3"/>
+    <ellipse cx="106" cy="188" rx="21" ry="27" fill="#46D6FF" opacity="0.16"/>
+    <ellipse cx="214" cy="188" rx="21" ry="27" fill="#46D6FF" opacity="0.16"/>
+    <ellipse cx="106" cy="188" rx="13.5" ry="18" fill="url(#kai48-E)"/>
+    <ellipse cx="214" cy="188" rx="13.5" ry="18" fill="url(#kai48-E)"/>
+    <ellipse cx="101.5" cy="180" rx="5" ry="6.5" fill="#FFFFFF"/>
+    <ellipse cx="209.5" cy="180" rx="5" ry="6.5" fill="#FFFFFF"/>
+    <ellipse cx="88" cy="221" rx="12" ry="6" fill="#FF7FB0" opacity="0.9"/>
+    <ellipse cx="232" cy="221" rx="12" ry="6" fill="#FF7FB0" opacity="0.9"/>
+    <path d="M148 206 Q160 211 172 206 Q170 226 160 226 Q150 226 148 206 Z" fill="#E0508F" stroke="#FF7FB0" stroke-width="3" stroke-linejoin="round"/>
+    <circle cx="160" cy="284" r="22" fill="url(#kai48-B)" stroke="#E8FBFF" stroke-width="4"/>
+    <path d="M155 274 L170 284 L155 294 Z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="4" stroke-linejoin="round"/>
+  </g>
+</svg>

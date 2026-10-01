@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 320 320">
+  <title>SyncKai – Kai (32, simplifié)</title>
+  <!-- Variante simplifiée pour 32 px, pleine tuile (barre d’outils 2x) -->
+  <defs>
+    <radialGradient id="kai32-T" cx="160" cy="140" r="210" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2A3590"/>
+      <stop offset="0.5" stop-color="#1F2A66"/>
+      <stop offset="1" stop-color="#141A3D"/>
+    </radialGradient>
+    <radialGradient id="kai32-H" cx="132" cy="132" r="180" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.5" stop-color="#F4F6FF"/>
+      <stop offset="1" stop-color="#C9CFF5"/>
+    </radialGradient>
+    <linearGradient id="kai32-L" x1="72" y1="146" x2="118" y2="44" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8A6BFF"/>
+      <stop offset="1" stop-color="#46D6FF"/>
+    </linearGradient>
+    <linearGradient id="kai32-R" x1="248" y1="146" x2="206" y2="62" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#46D6FF"/>
+      <stop offset="1" stop-color="#8A6BFF"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="320" rx="60" fill="url(#kai32-T)"/>
+  <path d="M76 146 C40 122 32 86 54 62 C68 47 86 44 100 46" fill="none" stroke="url(#kai32-L)" stroke-width="28" stroke-linecap="round"/>
+  <path d="M94 20 L134 47 L96 74 Z" fill="#46D6FF" stroke="#46D6FF" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M244 146 C282 124 290 98 276 80 C264 64 246 60 230 62" fill="none" stroke="url(#kai32-R)" stroke-width="28" stroke-linecap="round"/>
+  <path d="M236 35 L194 64 L234 91 Z" fill="#8A6BFF" stroke="#8A6BFF" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M160 98 C234 98 280 134 280 188 C280 242 234 278 160 278 C86 278 40 242 40 188 C40 134 86 98 160 98 Z" fill="url(#kai32-H)"/>
+  <ellipse cx="42" cy="192" rx="16" ry="30" fill="#5FE3FF"/>
+  <ellipse cx="278" cy="192" rx="16" ry="30" fill="#5FE3FF"/>
+  <path d="M160 126 C216 126 252 150 252 192 C252 234 216 260 160 260 C104 260 68 234 68 192 C68 150 104 126 160 126 Z" fill="#121633"/>
+  <ellipse cx="106" cy="188" rx="16" ry="21" fill="#5FE3FF"/>
+  <ellipse cx="214" cy="188" rx="16" ry="21" fill="#5FE3FF"/>
+  <ellipse cx="101" cy="179" rx="6" ry="7.5" fill="#FFFFFF"/>
+  <ellipse cx="209" cy="179" rx="6" ry="7.5" fill="#FFFFFF"/>
+  <ellipse cx="86" cy="223" rx="13" ry="7" fill="#FF7FB0"/>
+  <ellipse cx="234" cy="223" rx="13" ry="7" fill="#FF7FB0"/>
+  <path d="M146 206 Q160 212 174 206 Q172 228 160 228 Q148 228 146 206 Z" fill="#FF7FB0"/>
+</svg>

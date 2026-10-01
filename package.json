@@ -8,12 +8,14 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "icons": "tsc --noEmit -p scripts && node scripts/generate-icons.ts"
+    "icons": "tsc --noEmit -p scripts && node scripts/generate-icons.ts",
+    "package": "tsc --noEmit -p scripts && npm run build && node scripts/package.ts"
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^3.0.0",
     "@fontsource/m-plus-rounded-1c": "^5.3.0",
     "@fontsource/nunito": "^5.3.0",
+    "@resvg/resvg-js": "^2.6.2",
     "@tailwindcss/cli": "^4.3.3",
     "@tailwindcss/vite": "^4.3.3",
     "@types/chrome": "^0.3.4",

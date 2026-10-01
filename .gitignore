@@ -25,3 +25,6 @@ dist-ssr
 
 # Clés privées d'extension
 *.pem
+
+# Archives Chrome Web Store
+release/
