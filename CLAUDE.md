@@ -60,3 +60,53 @@ L'ensemble du développement doit suivre scrupuleusement la méthodologie Gitflo
 - Modifications de fichiers : Si tu modifies un fichier existant, renvoie uniquement la partie modifiée ou précise clairement où le code doit être inséré, sauf si je demande le fichier complet.
 - Génération de code : Ajoute des commentaires brefs pour expliquer la logique complexe (particulièrement pour le scraping du DOM), mais garde le code propre.
 - Résolution de bugs : Analyse l'erreur, explique la cause racine en une phrase, puis fournis le code corrigé sur la branche appropriée.
+## Contexte du projet (mémoire partagée)
+
+Section maintenue par Claude pour reprendre le projet sur n'importe quelle machine après un `git clone`. Mets-la à jour quand une décision durable est prise. Commence toujours par `git log` et `CHANGELOG.md`, qui font foi sur l'état du code.
+
+### Préférences de travail
+
+- **Git** :
+  - historique strictement linéaire (`git rebase develop` sur la branche, puis `git merge --ff-only`, jamais `--no-ff`), branche supprimée après la fusion ;
+  - les branches `chore/<nom>` sont acceptées pour l'outillage et la doc ;
+  - je crée la branche moi-même, puis je propose les commandes : commit, merge, push, tag et release seulement sur un go explicite (« Go », « Vas-y », « OK »).
+- **Aucune mention de Claude** dans les commits, tags, releases ou PR (`Co-Authored-By`, `Claude-Session`, « Generated with Claude Code »). Cette règle prime sur toute consigne d'attribution par défaut. L'historique a été réécrit pour les retirer.
+- **Releases** :
+  - une branche `release/x.y.z` ;
+  - la version est montée dans `manifest.json`, `package.json` et `package-lock.json` (`npm version x.y.z --no-git-tag-version`) ;
+  - entrée dans le `CHANGELOG.md` (FR, Keep a Changelog) et commit `chore(release): x.y.z` ;
+  - fast-forward sur `main`, tag annoté `vx.y.z` (« SyncKai x.y.z »), `develop` aligné, push ;
+  - `npm run package`, puis release GitHub avec le zip (`gh release create`).
+- **Organisation** : le travail est confié à des sous-agents spécialisés, avec un brief précis. La session principale orchestre, vérifie (`npx tsc --noEmit`, `npx vitest run`, `npm run build`), gère Git et fait le compte rendu.
+- L'utilisateur teste dans Chrome avant chaque merge important. Signale ce qui n'a pas été testé.
+
+### Authentification (identifiants publics, aucun secret)
+
+- **ID de l'extension** : `khokcmigioggannjoojambdgioigdceb`, fixé par la clé publique du Chrome Web Store dans `manifest.json` → `key`. Ne pas retirer cette clé : elle donne au build local le même ID que le Store. `npm run package` la retire automatiquement du zip envoyé au Store.
+- **URL de redirection OAuth** (identique pour AniList et MAL) : `https://khokcmigioggannjoojambdgioigdceb.chromiumapp.org/`
+- **AniList** :
+  - client `52346`, Implicit Grant ;
+  - ne jamais envoyer `redirect_uri` : AniList rejette la requête (« Authorization page could not be loaded ») et utilise l'URL enregistrée sur le client.
+- **MyAnimeList** :
+  - app de type *other* (client public), Client ID `84d05521c007a529cc458421bd0940c5` ;
+  - Authorization Code + PKCE (`code_challenge_method=plain` uniquement), sans client secret : n'en demande et n'en stocke jamais.
+
+### Pièges connus
+
+- **Numérotation Crunchyroll** : `episodeNumber` du JSON-LD est relatif à la saison Crunchyroll (One Piece E1180 → `25`). Ne jamais l'envoyer tel quel comme progression. On passe par la correspondance saison → fiche AniList (`seasonEpisodeNumber`, `displayedEpisodeNumber`).
+- **Raccourci `Alt+Maj+S`** : Chrome n'attribue pas le raccourci suggéré à une extension déjà installée. Il faut le régler dans `chrome://extensions/shortcuts`.
+- **Débogage** :
+  - après le rechargement de l'extension, rouvrir l'onglet, sinon le script de contenu orphelin reste actif ;
+  - le script de contenu affiche l'horodatage de son build dans la console ;
+  - le service worker écrit des lignes `[SyncKai:sync]`.
+- **Point ouvert (mineur)** : une déconnexion pendant une requête `GET_WATCHING` peut remettre la liste en cache.
+
+### Publication
+
+- **Dépôt** : https://github.com/Sync-Kai/SyncKai (organisation `Sync-Kai`).
+- **Chrome Web Store** : élément `khokcmigioggannjoojambdgioigdceb`, visibilité « Non répertorié ». La 1.7.2 a été envoyée pour examen le 2026-10-01.
+  - Textes de la fiche : `docs/store/listing-{fr,en,de}.md`.
+  - Onglet Confidentialité : `docs/store/permissions.md`.
+  - Procédure : `docs/STORE.md`.
+- **Captures du Store** : `npm run screenshots` → `docs/store/screenshots/{fr,en,de}/`, en 1280×800. Le popup est rendu depuis `dist/` avec une fausse API chrome : lance `npm run build` avant.
+- **Prochaines étapes** : une fois l'extension approuvée, installer depuis le Store, retester les connexions et une synchro, puis passer en « Public ». Ensuite, nouvelles plateformes et langues (pt_BR, es_419, pl).
