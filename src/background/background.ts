@@ -1,5 +1,6 @@
 import { getMalViewer } from './api/mal';
 import { getViewer } from './api/viewer';
+import { getWatchingList } from './api/watching';
 import { loginWithAniList } from './auth/anilist';
 import { loginWithMal } from './auth/mal';
 import { reopenReview, resolveReview, searchCandidates, syncEpisode } from './sync/sync-service';
@@ -34,6 +35,7 @@ const UNEXPECTED_ERRORS: { [K in MessageType]: MessageResponse<K> } = {
   SEARCH_ANIME: { ok: false, code: 'API_ERROR', message: 'Erreur inattendue.' },
   RESOLVE_REVIEW: { status: 'error', message: 'Erreur inattendue pendant la synchronisation.' },
   REOPEN_REVIEW: { ok: false, code: 'API_ERROR', message: 'Erreur inattendue.' },
+  GET_WATCHING: { ok: false, code: 'API_ERROR', message: 'Erreur inattendue.' },
 };
 
 type MessageHandlers = {
@@ -58,6 +60,7 @@ const handlers: MessageHandlers = {
   SEARCH_ANIME: ({ query }) => searchCandidates(query),
   RESOLVE_REVIEW: (payload) => resolveReview(payload),
   REOPEN_REVIEW: ({ key }) => reopenReview(key),
+  GET_WATCHING: ({ service }) => getWatchingList(service),
 };
 
 // Générique pour conserver la corrélation type ↔ payload ↔ handler

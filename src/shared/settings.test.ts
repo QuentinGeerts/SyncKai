@@ -8,12 +8,27 @@ describe('normalizeSettings', () => {
   });
 
   it('conserve des réglages valides', () => {
-    const settings = { autoSync: false, completionTrigger: 'percentage', completionPercentage: 90, showToast: false } as const;
+    const settings = {
+      autoSync: false,
+      completionTrigger: 'percentage',
+      completionPercentage: 90,
+      notificationLevel: 'detailed',
+      preferredPlayer: 'adn',
+    } as const;
     expect(normalizeSettings(settings)).toEqual(settings);
   });
 
-  it('complète les champs manquants (réglages d’une ancienne version)', () => {
-    expect(normalizeSettings({ showToast: false })).toEqual({ ...DEFAULT_SETTINGS, showToast: false });
+  it('migre l’ancien réglage showToast (≤ 1.3)', () => {
+    expect(normalizeSettings({ showToast: false }).notificationLevel).toBe('alerts-only');
+    expect(normalizeSettings({ showToast: true }).notificationLevel).toBe('discreet');
+    expect(normalizeSettings({ showToast: false, notificationLevel: 'detailed' }).notificationLevel).toBe('detailed');
+  });
+
+  it('rejette un niveau de notification ou un lecteur inconnus', () => {
+    expect(normalizeSettings({ notificationLevel: 'bruyant', preferredPlayer: 'netflix' })).toMatchObject({
+      notificationLevel: 'discreet',
+      preferredPlayer: 'crunchyroll',
+    });
   });
 
   it('borne et arrondit le pourcentage, rejette les valeurs invalides', () => {

@@ -47,7 +47,7 @@ interface RequestOptions {
   rateRetried?: boolean;
 }
 
-async function malRequest<T>(path: string, isData: (data: unknown) => data is T, options: RequestOptions = {}): Promise<T> {
+export async function malRequest<T>(path: string, isData: (data: unknown) => data is T, options: RequestOptions = {}): Promise<T> {
   const accessToken = await getMalAccessToken(options.refreshed === true);
   if (!accessToken) throw new ApiError('NOT_AUTHENTICATED', 'Non connecté à MyAnimeList.');
 

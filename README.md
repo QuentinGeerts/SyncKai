@@ -9,7 +9,7 @@ Extension de navigateur (Manifest V3) qui détecte les épisodes regardés sur C
 - Synchronisation au début du générique de fin quand la plateforme le fournit (Crunchyroll), sinon à un pourcentage réglable (85 % par défaut).
 - Toast de confirmation directement sur la page, même en plein écran.
 - Choix manuel de la fiche AniList quand la correspondance est incertaine, et correction des dernières synchros.
-- Page d'options : pause, mode de déclenchement (générique ou pourcentage), toasts, gestion des correspondances mémorisées.
+- Popup en trois écrans : **En cours** (séries en cours, prochain épisode, bouton « Ouvrir » vers Crunchyroll/ADN), **Activité** (vérifications et dernières synchros) et **Réglages** (comptes, lecteur préféré, pause, mode de déclenchement, notifications, correspondances mémorisées).
 
 Plateformes prises en charge : Crunchyroll, ADN. Services de suivi : AniList, MyAnimeList.
 
@@ -56,9 +56,8 @@ src/
   background/   Service worker : OAuth (AniList, MAL), API, résolution des correspondances, synchronisation
                 (trackers/ : un adapter par service de suivi)
   content/      Content script : adapters par plateforme, suivi de la vidéo, toast
-  popup/        Popup (TypeScript + Tailwind CSS) : connexion, profil, vérifications, dernières synchros
-  options/      Page d'options (réglages, correspondances mémorisées)
-  ui/           Helpers DOM et icônes partagés par le popup et la page d'options
+  popup/        Popup (TypeScript + Tailwind CSS) : En cours, Activité (vérifications, dernières synchros), Réglages
+  ui/           Helpers DOM et icônes du popup
   shared/       Types, messages typés, réglages et accès au stockage communs
 scripts/        Outils de développement (génération des icônes)
 ```

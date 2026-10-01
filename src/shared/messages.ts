@@ -7,6 +7,7 @@ import type { CandidateSummary } from './review.types';
 import type { MalViewerResult } from './mal.types';
 import type { SyncOutcome } from './sync.types';
 import { isTrackerId, type TrackerId } from './tracker.types';
+import type { WatchingResult } from './watching.types';
 
 export interface EpisodeCompletedPayload {
   episode: EpisodeInfo;
@@ -30,6 +31,8 @@ export interface MessageMap {
   SEARCH_ANIME: { payload: { query: string }; response: Result<CandidateSummary[], AniListErrorCode> };
   RESOLVE_REVIEW: { payload: ResolveReviewPayload; response: SyncOutcome };
   REOPEN_REVIEW: { payload: { key: string }; response: Result<null, AniListErrorCode | 'NOT_FOUND'> };
+  /** Liste "en cours" d'un service (réponse fraîche ; le popup affiche d'abord le cache du stockage) */
+  GET_WATCHING: { payload: { service: TrackerId }; response: WatchingResult };
 }
 
 /** Messages réservés aux pages de l'extension (popup) : refusés s'ils viennent d'un content script */
@@ -39,6 +42,7 @@ export const EXTENSION_PAGE_ONLY: ReadonlySet<MessageType> = new Set([
   'SEARCH_ANIME',
   'RESOLVE_REVIEW',
   'REOPEN_REVIEW',
+  'GET_WATCHING',
 ]);
 
 export type MessageType = keyof MessageMap;
@@ -66,6 +70,7 @@ const isSearchPayload = (p: unknown): p is { query: string } =>
   isRecord(p) && typeof p.query === 'string' && p.query.trim().length > 0 && p.query.length <= 100;
 const isResolveReviewPayload = (p: unknown): p is ResolveReviewPayload =>
   isRecord(p) && isKey(p.key) && isPositiveInt(p.mediaId) && isPositiveInt(p.progress);
+const isWatchingPayload = (p: unknown): p is { service: TrackerId } => isRecord(p) && isTrackerId(p.service);
 const isReopenReviewPayload = (p: unknown): p is { key: string } => isRecord(p) && isKey(p.key);
 
 // Record exhaustif : TypeScript impose un validateur de payload pour chaque MessageType
@@ -78,6 +83,7 @@ const PAYLOAD_GUARDS: { [K in MessageType]: (payload: unknown) => payload is Mes
   SEARCH_ANIME: isSearchPayload,
   RESOLVE_REVIEW: isResolveReviewPayload,
   REOPEN_REVIEW: isReopenReviewPayload,
+  GET_WATCHING: isWatchingPayload,
 };
 
 /** Valide le type ET le payload d'un message reçu (les content scripts tournent sur des pages tierces). */

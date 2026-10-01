@@ -1,33 +1,107 @@
 import { h } from '../../ui/dom';
-import type { PopupState } from '../state';
+import { icon, mochi } from '../../ui/icons';
+import type { Screen } from '../state';
+import { kanaLabel } from './ui';
 
-const STATUS_BADGE: Record<PopupState['status'], { label: string; dot: string }> = {
-  loading: { label: 'Chargement…', dot: 'bg-zinc-500 animate-pulse' },
-  'logged-out': { label: 'Déconnecté', dot: 'bg-red-500' },
-  'logged-in': { label: 'Connecté', dot: 'bg-emerald-500' },
-};
+interface HeaderProps {
+  isSettings: boolean;
+  onSettings: () => void;
+}
 
-export function renderHeader(state: Pick<PopupState, 'status'>): HTMLElement {
-  const badge = STATUS_BADGE[state.status];
-
+export function renderHeader({ isSettings, onSettings }: HeaderProps): HTMLElement {
   return h(
     'header',
-    { class: 'flex items-center justify-between border-b border-zinc-800 px-4 py-3' },
+    { class: 'flex h-14 shrink-0 items-center justify-between px-4' },
     h(
       'div',
       { class: 'flex items-center gap-2' },
+      mochi('h-6 w-6'),
       h(
         'div',
-        { class: 'flex h-7 w-7 items-center justify-center rounded-lg bg-linear-to-br from-sky-500 to-indigo-600 text-xs font-bold' },
-        'SK',
+        { class: 'flex items-baseline gap-1.5' },
+        h('span', { class: 'font-display text-[15px] font-extrabold tracking-[0.2px]' }, 'SyncKai'),
+        kanaLabel('シンカイ'),
       ),
-      h('h1', { class: 'text-sm font-semibold tracking-tight' }, 'SyncKai'),
     ),
     h(
-      'span',
-      { class: 'flex items-center gap-1.5 rounded-full bg-zinc-900 px-2 py-0.5 text-[10px] font-medium text-zinc-400 ring-1 ring-zinc-800' },
-      h('span', { class: `h-1.5 w-1.5 rounded-full ${badge.dot}` }),
-      badge.label,
+      'button',
+      {
+        class: `flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-colors hover:bg-raised ${isSettings ? 'bg-raised text-sakura' : 'bg-surface text-muted'}`,
+        attrs: { type: 'button', 'aria-label': 'Réglages', 'aria-pressed': String(isSettings), 'data-focus': 'gear' },
+        on: { click: onSettings },
+      },
+      icon('gear', 'h-[18px] w-[18px]'),
     ),
+  );
+}
+
+interface NavProps {
+  screen: Exclude<Screen, 'settings'>;
+  pending: number;
+  onNavigate: (screen: Exclude<Screen, 'settings'>) => void;
+}
+
+/** Navigation segmentée En cours / Activité (pastille beurre = vérifications en attente) */
+export function renderNav({ screen, pending, onNavigate }: NavProps): HTMLElement {
+  const tab = (target: Exclude<Screen, 'settings'>, label: string, aria: string | null, badge: HTMLElement | null): HTMLElement => {
+    const on = screen === target;
+    return h(
+      'button',
+      {
+        class: `flex h-9 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-full text-[13px] transition-colors ${on ? 'bg-sakura font-bold text-on-fill' : 'font-semibold text-muted hover:text-ink'}`,
+        attrs: { type: 'button', 'aria-pressed': String(on), 'data-focus': `nav-${target}`, ...(aria ? { 'aria-label': aria } : {}) },
+        on: { click: () => onNavigate(target) },
+      },
+      h('span', {}, label),
+      badge,
+    );
+  };
+
+  const badge =
+    pending > 0
+      ? h(
+          'span',
+          {
+            class: 'inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-md bg-butter px-[5px] text-[11px] font-bold text-on-fill',
+            attrs: { 'aria-hidden': 'true' },
+          },
+          String(pending),
+        )
+      : null;
+
+  return h(
+    'nav',
+    { class: 'flex h-11 shrink-0 items-start px-4', attrs: { 'aria-label': 'Sections' } },
+    h(
+      'div',
+      { class: 'flex flex-1 gap-1 rounded-full bg-surface p-0.5' },
+      tab('watching', 'En cours', null, null),
+      tab('activity', 'Activité', pending > 0 ? `Activité, ${pending} élément${pending > 1 ? 's' : ''} à vérifier` : null, badge),
+    ),
+  );
+}
+
+/** Barre de l'écran Réglages : retour + titre centré ; `status` = retour d'enregistrement */
+export function renderSettingsBar(onBack: () => void, status: HTMLElement): HTMLElement {
+  return h(
+    'div',
+    { class: 'flex h-11 shrink-0 items-start gap-2 px-4' },
+    h(
+      'button',
+      {
+        class: 'flex h-9 w-[76px] shrink-0 cursor-pointer items-center gap-1 rounded-full bg-surface pr-3 pl-2 text-[13px] font-bold text-ink transition-colors hover:bg-raised',
+        attrs: { type: 'button', 'data-focus': 'back' },
+        on: { click: onBack },
+      },
+      icon('back', 'h-4 w-4', '2.4'),
+      'Retour',
+    ),
+    h(
+      'div',
+      { class: 'flex h-9 flex-1 items-center justify-center gap-1.5' },
+      h('h1', { class: 'm-0 font-display text-[15px] font-extrabold' }, 'Réglages'),
+      kanaLabel('セッテイ', 'text-sakura'),
+    ),
+    h('div', { class: 'flex h-9 w-[76px] shrink-0 items-center justify-end' }, status),
   );
 }

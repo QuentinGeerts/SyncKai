@@ -1,5 +1,5 @@
 import type { AniListErrorCode } from '../../shared/anilist.types';
-import { refreshReviewBadge } from '../../shared/badge';
+import { flashSyncBadge, refreshReviewBadge } from '../../shared/badge';
 import type { EpisodeInfo } from '../../shared/episode.types';
 import type { ResolveReviewPayload } from '../../shared/messages';
 import type { Result } from '../../shared/result';
@@ -124,6 +124,8 @@ async function writeToServices(
 
   if (results.some((r) => r.outcome.status === 'updated')) {
     await addRecentSync({ key, episode, mediaId: catalog.mediaId, mediaTitle: catalog.title, progress, syncedAt: Date.now() });
+    // Coche sur l'icône (visible en plein écran) : décorative, ne bloque ni ne fait échouer la synchro
+    void flashSyncBadge();
   }
   // Correspondance appliquée pour cette saison : une éventuelle vérification en attente est caduque
   if (results.some((r) => r.outcome.status !== 'error') && (await getPendingReviews()).some((r) => r.key === key)) {

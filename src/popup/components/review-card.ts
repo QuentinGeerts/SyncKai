@@ -2,8 +2,9 @@ import type { Result } from '../../shared/result';
 import type { CandidateSummary, PendingReview } from '../../shared/review.types';
 import { describeOutcome, type SyncFeedback } from '../../shared/sync-feedback';
 import type { SyncOutcome } from '../../shared/sync.types';
-import { h, nodes } from '../../ui/dom';
-import { icon } from '../../ui/icons';
+import { h, nodes, preserveFocus } from '../../ui/dom';
+import { icon, warnIcon } from '../../ui/icons';
+import { BTN_GHOST, BTN_PRIMARY, PLATFORM_LABELS, renderCover } from './ui';
 
 export interface ReviewActions {
   search(query: string): Promise<Result<CandidateSummary[], string>>;
@@ -31,10 +32,10 @@ const FORMAT_LABELS: Record<string, string> = {
 };
 
 const TONE_CLASSES: Record<SyncFeedback['tone'], string> = {
-  success: 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/30',
-  info: 'bg-sky-500/10 text-sky-300 ring-sky-500/30',
-  warning: 'bg-amber-500/10 text-amber-300 ring-amber-500/30',
-  error: 'bg-red-500/10 text-red-300 ring-red-500/30',
+  success: 'border-mint/40 bg-mint/10 text-mint',
+  info: 'border-lavender/40 bg-lavender/10 text-lavender',
+  warning: 'border-butter/40 bg-butter/10 text-butter',
+  error: 'border-danger/40 bg-danger/10 text-danger',
 };
 
 function episodeLabel({ episode }: PendingReview): string {
@@ -44,7 +45,8 @@ function episodeLabel({ episode }: PendingReview): string {
   ].filter((p): p is string => p !== null);
   const displayed = episode.displayedEpisodeNumber;
   if (displayed !== null && displayed !== episode.seasonEpisodeNumber) parts.push(`(affiché E${displayed})`);
-  return parts.join(' · ') || 'Épisode';
+  parts.push(PLATFORM_LABELS[episode.platform]);
+  return parts.join(' · ');
 }
 
 function candidateMeta(c: CandidateSummary): string {
@@ -74,7 +76,7 @@ export function createReviewCard(initial: PendingReview, actions: ReviewActions,
   let note: string | null = null;
   let closeTimer: ReturnType<typeof setTimeout> | undefined;
 
-  const element = h('article', { class: 'flex flex-col gap-2.5 rounded-xl bg-zinc-900 p-3 ring-1 ring-amber-500/30' });
+  const element = h('article', { class: 'flex flex-col gap-3 rounded-card bg-raised p-3 shadow-pop' });
 
   function reset(next: PendingReview): void {
     review = next;
@@ -90,17 +92,14 @@ export function createReviewCard(initial: PendingReview, actions: ReviewActions,
 
   function renderCandidate(candidate: CandidateSummary): HTMLElement {
     const isSelected = candidate.id === selected?.id;
-    const cover = candidate.coverUrl
-      ? h('img', { class: 'h-10 w-7 shrink-0 rounded bg-zinc-800 object-cover', attrs: { src: candidate.coverUrl, alt: '', referrerpolicy: 'no-referrer' } })
-      : h('div', { class: 'h-10 w-7 shrink-0 rounded bg-zinc-800' });
 
     return h(
       'button',
       {
-        class: `flex w-full cursor-pointer items-center gap-2 rounded-lg p-1.5 text-left ring-1 transition focus:outline-none focus-visible:ring-sky-400 ${
-          isSelected ? 'bg-sky-500/10 ring-sky-500/50' : 'ring-transparent hover:bg-zinc-800'
+        class: `flex min-h-[52px] w-full cursor-pointer items-center gap-3 rounded-lg border-2 px-2 py-1 text-left text-ink transition-colors ${
+          isSelected ? 'border-lavender bg-surface' : 'border-line bg-transparent hover:bg-surface/60'
         }`,
-        attrs: { type: 'button', 'aria-pressed': String(isSelected) },
+        attrs: { type: 'button', 'aria-pressed': String(isSelected), 'data-focus': `cand-${candidate.id}` },
         on: {
           click: () => {
             selected = candidate;
@@ -108,21 +107,28 @@ export function createReviewCard(initial: PendingReview, actions: ReviewActions,
           },
         },
       },
-      cover,
+      renderCover(candidate.title, candidate.coverUrl, 'h-10 w-7', 'text-[9px]'),
       h(
-        'div',
-        { class: 'min-w-0 flex-1' },
-        h('p', { class: 'truncate text-xs font-medium text-zinc-100', attrs: { title: candidate.title } }, candidate.title),
-        h('p', { class: 'text-[10px] text-zinc-500' }, candidateMeta(candidate) || '—'),
+        'span',
+        { class: 'flex min-w-0 flex-1 flex-col gap-0.5' },
+        h('span', { class: 'truncate text-[12px] font-bold', attrs: { title: candidate.title } }, candidate.title),
+        h('span', { class: 'text-[11px] font-semibold text-muted' }, candidateMeta(candidate) || '—'),
       ),
-      isSelected && icon('check', 'h-3.5 w-3.5 text-sky-400'),
+      h(
+        'span',
+        {
+          class: `flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-2 text-on-fill ${isSelected ? 'border-lavender bg-lavender' : 'border-line'}`,
+          attrs: { 'aria-hidden': 'true' },
+        },
+        isSelected && icon('check', 'h-2.5 w-2.5', '4'),
+      ),
     );
   }
 
   function renderSearch(): HTMLElement {
     const input = h('input', {
-      class: 'min-w-0 flex-1 rounded-md bg-zinc-950 px-2 py-1 text-xs text-zinc-100 ring-1 ring-zinc-800 placeholder:text-zinc-600 focus:outline-none focus:ring-sky-500',
-      attrs: { type: 'search', placeholder: 'Autre fiche…', 'aria-label': 'Rechercher une fiche AniList', maxlength: '100' },
+      class: 'h-8 min-w-0 flex-1 rounded-lg border border-line bg-ground px-2 text-[12px] text-ink placeholder:text-muted/70',
+      attrs: { type: 'search', placeholder: 'Autre fiche…', 'aria-label': 'Rechercher une fiche AniList', maxlength: '100', 'data-focus': 'search' },
       on: { input: () => (searchQuery = input.value) },
     });
     input.value = searchQuery;
@@ -142,28 +148,29 @@ export function createReviewCard(initial: PendingReview, actions: ReviewActions,
       h(
         'button',
         {
-          class: 'flex shrink-0 cursor-pointer items-center rounded-md px-2 text-zinc-400 ring-1 ring-zinc-800 hover:text-zinc-100 disabled:opacity-50',
-          attrs: { type: 'submit', 'aria-label': 'Rechercher', ...(isSearching ? { disabled: '' } : {}) },
+          class: 'flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted transition-colors hover:bg-surface hover:text-ink disabled:opacity-50',
+          attrs: { type: 'submit', 'aria-label': 'Rechercher', 'data-focus': 'search-btn', ...(isSearching ? { disabled: '' } : {}) },
         },
-        isSearching ? icon('spinner', 'h-3.5 w-3.5 animate-spin') : icon('search', 'h-3.5 w-3.5'),
+        isSearching ? icon('spinner', 'h-3.5 w-3.5 motion-safe:animate-spin') : icon('search', 'h-3.5 w-3.5'),
       ),
     );
   }
 
   function renderProgressField(): HTMLElement {
+    const id = `sk-ep-${review.createdAt}`;
     const input = h('input', {
-      class: 'w-16 rounded-md bg-zinc-950 px-2 py-1 text-right text-xs text-zinc-100 ring-1 ring-zinc-800 focus:outline-none focus:ring-sky-500',
-      attrs: { type: 'number', min: '1', step: '1', inputmode: 'numeric', 'aria-label': 'Épisode AniList' },
+      class: 'h-8 w-16 rounded-lg border border-line bg-ground px-2 text-right text-[13px] font-bold text-ink tabular-nums',
+      attrs: { id, type: 'number', min: '1', step: '1', inputmode: 'numeric', 'data-focus': 'progress' },
       on: { input: () => (progressText = input.value) },
     });
     input.value = progressText;
     const total = selected?.episodes;
 
     return h(
-      'label',
-      { class: 'flex items-center justify-between gap-2 text-xs text-zinc-400' },
-      'Épisode AniList',
-      h('span', { class: 'flex items-center gap-1.5' }, input, h('span', { class: 'text-[10px] text-zinc-600' }, total ? `/ ${total}` : '')),
+      'div',
+      { class: 'flex items-center justify-between gap-2' },
+      h('label', { class: 'text-[12px] font-semibold text-muted', attrs: { for: id } }, 'Épisode sur la fiche'),
+      h('span', { class: 'flex items-center gap-1.5' }, input, total ? h('span', { class: 'text-[11px] text-muted' }, `/ ${total}`) : null),
     );
   }
 
@@ -171,30 +178,30 @@ export function createReviewCard(initial: PendingReview, actions: ReviewActions,
     if (!feedback) return null;
     return h(
       'div',
-      { class: `rounded-lg px-2.5 py-2 text-[11px] ring-1 ${TONE_CLASSES[feedback.tone]}`, attrs: { role: 'status' } },
-      h('p', { class: 'font-medium' }, feedback.title),
-      feedback.message && h('p', { class: 'opacity-80' }, feedback.message),
-      note && h('p', { class: 'mt-1 font-medium text-amber-300' }, note),
+      { class: `rounded-lg border px-2.5 py-2 text-[11px] ${TONE_CLASSES[feedback.tone]}`, attrs: { role: 'status' } },
+      h('p', { class: 'm-0 font-bold' }, feedback.title),
+      feedback.message && h('p', { class: 'm-0 opacity-80' }, feedback.message),
+      note && h('p', { class: 'm-0 mt-1 font-bold text-butter' }, note),
     );
   }
 
   function render(): void {
+    preserveFocus(element, draw);
+  }
+
+  function draw(): void {
     const header = h(
-      'div',
-      { class: 'min-w-0' },
-      h('p', { class: 'truncate text-sm font-semibold text-zinc-100', attrs: { title: review.episode.animeTitle } }, review.episode.animeTitle),
-      h('p', { class: 'text-[11px] text-zinc-500' }, episodeLabel(review)),
+      'p',
+      { class: 'm-0 truncate text-[13px] font-bold', attrs: { title: review.episode.animeTitle } },
+      review.episode.animeTitle,
+      h('span', { class: 'text-[12px] font-semibold text-muted' }, ` · ${episodeLabel(review)}`),
     );
 
     if (phase === 'done') {
       element.replaceChildren(...nodes([
         header,
         renderFeedback(),
-        h(
-          'button',
-          { class: 'self-end cursor-pointer text-[11px] font-medium text-zinc-400 hover:text-zinc-100', attrs: { type: 'button' }, on: { click: close } },
-          'Fermer',
-        ),
+        h('button', { class: `${BTN_GHOST} self-end text-muted`, attrs: { type: 'button' }, on: { click: close } }, 'Fermer'),
       ]));
       return;
     }
@@ -204,13 +211,17 @@ export function createReviewCard(initial: PendingReview, actions: ReviewActions,
     const searchItems = searchResults?.map(renderCandidate) ?? [];
 
     element.replaceChildren(...nodes([
-      header,
-      h('p', { class: 'flex items-start gap-1.5 text-[11px] text-amber-300' }, icon('alert', 'mt-px h-3 w-3'), h('span', {}, review.reason)),
       h(
         'div',
-        { class: 'flex max-h-56 flex-col gap-1 overflow-y-auto pr-0.5' },
-        ...(listItems.length > 0 ? listItems : [h('p', { class: 'text-[11px] text-zinc-500' }, 'Aucune fiche proposée : utilise la recherche.')]),
-        searchResults && h('p', { class: 'mt-1 text-[10px] uppercase tracking-wide text-zinc-500' }, `Résultats (${searchResults.length})`),
+        { class: 'flex flex-col gap-1' },
+        header,
+        h('p', { class: 'm-0 flex items-start gap-1.5 text-[12px] font-semibold text-butter' }, warnIcon('mt-px h-3.5 w-3.5 text-butter'), h('span', {}, review.reason)),
+      ),
+      h(
+        'div',
+        { class: 'sk-scroll flex max-h-56 flex-col gap-1 overflow-y-auto pr-0.5', attrs: { role: 'group', 'aria-label': 'Fiche correspondante' } },
+        ...(listItems.length > 0 ? listItems : [h('p', { class: 'm-0 text-[11px] text-muted' }, 'Aucune fiche proposée : utilise la recherche.')]),
+        searchResults && h('p', { class: 'm-0 mt-1 text-[10px] font-bold tracking-wide text-muted uppercase' }, `Résultats (${searchResults.length})`),
         ...searchItems,
       ),
       renderSearch(),
@@ -218,12 +229,12 @@ export function createReviewCard(initial: PendingReview, actions: ReviewActions,
       renderFeedback(),
       h(
         'div',
-        { class: 'flex items-center justify-between gap-2' },
+        { class: 'flex justify-end gap-2' },
         h(
           'button',
           {
-            class: 'cursor-pointer rounded-md px-2 py-1 text-xs font-medium text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 disabled:opacity-50',
-            attrs: { type: 'button', ...(isSubmitting ? { disabled: '' } : {}) },
+            class: `${BTN_GHOST} text-muted`,
+            attrs: { type: 'button', 'data-focus': 'dismiss', ...(isSubmitting ? { disabled: '' } : {}) },
             on: { click: () => void dismiss() },
           },
           'Ignorer',
@@ -231,12 +242,11 @@ export function createReviewCard(initial: PendingReview, actions: ReviewActions,
         h(
           'button',
           {
-            class:
-              'flex cursor-pointer items-center gap-1.5 rounded-md bg-sky-600 px-3 py-1 text-xs font-medium text-white transition hover:bg-sky-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:cursor-not-allowed disabled:opacity-50',
-            attrs: { type: 'button', ...(isSubmitting || !selected ? { disabled: '' } : {}) },
+            class: BTN_PRIMARY,
+            attrs: { type: 'button', 'data-focus': 'confirm', ...(isSubmitting || !selected ? { disabled: '' } : {}) },
             on: { click: () => void submit() },
           },
-          isSubmitting && icon('spinner', 'h-3.5 w-3.5 animate-spin'),
+          isSubmitting && icon('spinner', 'h-3.5 w-3.5 motion-safe:animate-spin'),
           isSubmitting ? 'Synchronisation…' : 'Confirmer',
         ),
       ),

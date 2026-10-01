@@ -3,6 +3,33 @@
 Toutes les évolutions notables de SyncKai sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.4.0] - 2026-10-01
+
+Refonte complète du popup (direction « Yoru Mochi · Kotatsu ») : tout se gère désormais depuis le popup.
+
+### Ajouté
+
+- **En cours** : liste des animes en cours (AniList ou MyAnimeList, sélecteur si les deux sont connectés), avec carte « Reprendre » pour la dernière série synchronisée.
+- **Prochain épisode** : « Ép. 3 disponible », « Ép. 5 dans 18 h », « Prochain épisode bientôt » ou « Série terminée » (catalogue AniList, y compris pour MyAnimeList).
+- **Tri** de la liste : prochaine sortie (par défaut), dernière mise à jour, titre, épisodes restants — choix mémorisé.
+- **Ouvrir** chaque anime sur sa plateforme (Crunchyroll, ADN), avec un réglage **Lecteur préféré** quand il est disponible sur les deux.
+- **Barre d'état** : « Tout est synchronisé · il y a … », éléments à vérifier, session expirée avec « Reconnecter ».
+- **Notifications sur la page** à 3 niveaux : *Discrètes* (par défaut : petite pastille, rien en plein écran), *Détaillées*, *Alertes seulement*. Les alertes restent toujours affichées.
+- Coche sur l'icône de l'extension après chaque synchronisation réussie.
+- Écrans de premier lancement et de liste vide avec la mascotte Mochi.
+
+### Modifié
+
+- La page d'options est supprimée : ses réglages sont dans l'onglet Réglages du popup (comptes, lecture, synchronisation, notifications, correspondances).
+- Nouveau style visuel : thème sombre chaleureux, polices M PLUS Rounded 1c et Nunito embarquées (sous-ensembles latins), toasts en bulle.
+- L'ancien réglage « toasts activés / désactivés » est migré vers le niveau de notification équivalent.
+
+### Corrigé
+
+- La liste « En cours » se met à jour après une synchronisation même si le popup est ouvert.
+- MyAnimeList : les séries classées adultes et les listes de plus de 100 séries sont incluses.
+- Le cache d'une liste est effacé à la déconnexion du compte correspondant.
+
 ## [1.3.0] - 2026-09-30
 
 ### Ajouté

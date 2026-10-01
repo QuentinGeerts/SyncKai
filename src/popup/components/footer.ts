@@ -1,26 +1,102 @@
+import { TRACKER_LABELS, type TrackerId } from '../../shared/tracker.types';
 import { h } from '../../ui/dom';
-import { icon } from '../../ui/icons';
+import { icon, warnIcon } from '../../ui/icons';
+import { serviceAvatar } from './ui';
+
+export type FooterStatus =
+  | { kind: 'none' }
+  | { kind: 'pending'; count: number }
+  | { kind: 'expired'; service: TrackerId }
+  | { kind: 'ok'; relative: string | null };
 
 interface FooterProps {
   version: string;
+  /** Services affichés en pastille, avec leur état */
+  chips: readonly { service: TrackerId; state: 'ok' | 'expired' }[];
+  status: FooterStatus;
+  onOpenSettings: () => void;
+  onOpenActivity: () => void;
+  onReconnect: (service: TrackerId) => void;
 }
 
-// La déconnexion se fait par service, depuis la carte de chaque compte
-export function renderFooter({ version }: FooterProps): HTMLElement {
+function renderStatus({ status, onOpenActivity, onReconnect }: FooterProps): HTMLElement {
+  const box = 'flex min-w-0 flex-1 items-center justify-center gap-1 text-[12px] font-semibold whitespace-nowrap';
+  switch (status.kind) {
+    case 'none':
+      return h(
+        'div',
+        { class: `${box} justify-start gap-2 text-muted`, attrs: { role: 'status' } },
+        h('span', { class: 'h-2 w-2 shrink-0 rounded-full bg-muted opacity-60', attrs: { 'aria-hidden': 'true' } }),
+        h('span', { class: 'truncate' }, 'Aucun compte connecté'),
+      );
+    case 'pending': {
+      const label = `${status.count} élément${status.count > 1 ? 's' : ''} à vérifier`;
+      return h(
+        'div',
+        { class: box, attrs: { role: 'status' } },
+        h(
+          'button',
+          {
+            class: 'flex h-8 min-w-0 cursor-pointer items-center gap-1 rounded-full px-2 text-butter transition-colors hover:bg-raised',
+            attrs: { type: 'button', 'data-focus': 'footer-pending' },
+            on: { click: onOpenActivity },
+          },
+          warnIcon('h-3.5 w-3.5 text-butter'),
+          h('span', { class: 'truncate' }, label),
+        ),
+      );
+    }
+    case 'expired':
+      return h(
+        'div',
+        { class: `${box} gap-2`, attrs: { role: 'status' } },
+        h('span', { class: 'flex min-w-0 items-center gap-1 text-danger' }, icon('alert', 'h-3.5 w-3.5'), h('span', { class: 'truncate' }, 'Session expirée')),
+        h(
+          'button',
+          {
+            class: 'h-8 shrink-0 cursor-pointer rounded-full px-2 font-bold text-sakura transition-colors hover:bg-raised',
+            attrs: { type: 'button', 'aria-label': `Reconnecter ${TRACKER_LABELS[status.service]}`, 'data-focus': 'footer-reconnect' },
+            on: { click: () => onReconnect(status.service) },
+          },
+          'Reconnecter',
+        ),
+      );
+    case 'ok':
+      return h(
+        'div',
+        { class: box, attrs: { role: 'status' } },
+        icon('check', 'h-3.5 w-3.5 text-mint', '3'),
+        h('span', { class: 'truncate' }, 'Tout est synchronisé', status.relative && h('span', { class: 'text-muted' }, ` · ${status.relative}`)),
+      );
+  }
+}
+
+/** Barre d'état : comptes, état de synchronisation, version */
+export function renderFooter(props: FooterProps): HTMLElement {
   return h(
     'footer',
-    { class: 'flex h-9 items-center justify-between border-t border-zinc-800 px-4 text-[10px] text-zinc-600' },
-    h('span', {}, `v${version}`),
-    h(
-      'button',
-      {
-        class:
-          'flex cursor-pointer items-center gap-1 rounded px-1.5 py-1 font-medium text-zinc-400 transition hover:bg-zinc-900 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400',
-        attrs: { type: 'button' },
-        on: { click: () => void chrome.runtime.openOptionsPage() },
-      },
-      icon('sliders', 'h-3 w-3'),
-      'Options',
-    ),
+    { class: 'flex h-[52px] shrink-0 items-center gap-2 border-t border-dotted border-line bg-surface px-4' },
+    props.chips.length > 0 &&
+      h(
+        'div',
+        { class: 'flex shrink-0 items-center gap-1' },
+        ...props.chips.map(({ service, state }) =>
+          h(
+            'button',
+            {
+              class: 'cursor-pointer rounded-full transition hover:brightness-110',
+              attrs: {
+                type: 'button',
+                'aria-label': `Compte ${TRACKER_LABELS[service]} ${state === 'ok' ? 'connecté' : 'expiré'} — ouvrir les réglages`,
+                'data-focus': `chip-${service}`,
+              },
+              on: { click: props.onOpenSettings },
+            },
+            serviceAvatar(service, state),
+          ),
+        ),
+      ),
+    renderStatus(props),
+    h('span', { class: 'shrink-0 text-[10px] font-semibold text-muted' }, `v${props.version}`),
   );
 }

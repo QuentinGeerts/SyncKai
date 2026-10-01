@@ -31,3 +31,17 @@ export function h<K extends keyof HTMLElementTagNameMap>(
   el.append(...nodes(children));
   return el;
 }
+
+/**
+ * Redessine `container` via `draw` en conservant le focus clavier : l'élément actif est retrouvé
+ * après coup par son attribut data-focus (les vues sont recréées, pas mises à jour).
+ */
+export function preserveFocus(container: HTMLElement, draw: () => void): void {
+  const active = document.activeElement;
+  const key = active instanceof HTMLElement && container.contains(active) ? active.dataset.focus : undefined;
+  draw();
+  // Élément toujours présent (non recréé) : le focus n'a pas bougé
+  if (!key || active?.isConnected) return;
+  const next = [...container.querySelectorAll<HTMLElement>('[data-focus]')].find((el) => el.dataset.focus === key);
+  next?.focus({ preventScroll: true });
+}

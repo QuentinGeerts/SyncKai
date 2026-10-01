@@ -4,6 +4,8 @@ import { isRecord } from './guards';
 import { isMalToken, isMalViewer, type MalToken, type MalViewer } from './mal.types';
 import { isPendingReview, isRecentSync, type PendingReview, type RecentSync } from './review.types';
 import { isMediaMapping, type MediaMapping } from './sync.types';
+import type { TrackerId } from './tracker.types';
+import { isWatchingList, type WatchingList } from './watching.types';
 
 const MAX_PENDING_REVIEWS = 20;
 const MAX_RECENT_SYNCS = 5;
@@ -27,6 +29,7 @@ export const STORAGE_KEYS = {
   recentSyncs: 'recentSyncs',
   malToken: 'malToken',
   malViewer: 'malViewer',
+  watchingCache: 'watchingCache',
 } as const;
 
 /** Retourne le token AniList s'il existe et n'a pas expiré. */
@@ -119,9 +122,15 @@ export function addRecentSync(sync: RecentSync): Promise<void> {
   });
 }
 
-/** Supprime les données de session AniList : token, profil, vérifications et synchros de l'utilisateur. */
+/**
+ * Supprime la session AniList : token, profil et liste « En cours » en cache (un autre compte ne doit
+ * pas la voir). Appelée à la déconnexion comme à l'invalidation du token.
+ */
 export function clearAniListSession(): Promise<void> {
-  return withStorageLock(() => chrome.storage.local.remove([STORAGE_KEYS.anilistToken, STORAGE_KEYS.anilistViewer]));
+  return withStorageLock(async () => {
+    await chrome.storage.local.remove([STORAGE_KEYS.anilistToken, STORAGE_KEYS.anilistViewer]);
+    await removeCachedWatching('anilist');
+  });
 }
 
 /**
@@ -129,7 +138,7 @@ export function clearAniListSession(): Promise<void> {
  * service de suivi n'est connecté (déconnexion du dernier compte).
  */
 export function clearUserSyncData(): Promise<void> {
-  return withStorageLock(() => chrome.storage.local.remove([STORAGE_KEYS.pendingReviews, STORAGE_KEYS.recentSyncs]));
+  return withStorageLock(() => chrome.storage.local.remove([STORAGE_KEYS.pendingReviews, STORAGE_KEYS.recentSyncs, STORAGE_KEYS.watchingCache]));
 }
 
 // ─── Session MyAnimeList ──────────────────────────────────────────────────
@@ -155,6 +164,37 @@ export async function saveCachedMalViewer(viewer: MalViewer): Promise<void> {
   await chrome.storage.local.set({ [STORAGE_KEYS.malViewer]: viewer });
 }
 
+/** Comme clearAniListSession : token, profil et liste « En cours » MAL en cache. */
 export function clearMalSession(): Promise<void> {
-  return withStorageLock(() => chrome.storage.local.remove([STORAGE_KEYS.malToken, STORAGE_KEYS.malViewer]));
+  return withStorageLock(async () => {
+    await chrome.storage.local.remove([STORAGE_KEYS.malToken, STORAGE_KEYS.malViewer]);
+    await removeCachedWatching('mal');
+  });
+}
+
+// ─── Cache de la liste « En cours » (affichage instantané du popup) ──────────
+
+/** Dernière liste « en cours » récupérée pour ce service, null si absente ou illisible. */
+export async function getCachedWatching(service: TrackerId): Promise<WatchingList | null> {
+  const stored = await chrome.storage.local.get(STORAGE_KEYS.watchingCache);
+  const cache: unknown = stored[STORAGE_KEYS.watchingCache];
+  const list: unknown = isRecord(cache) ? cache[service] : undefined;
+  return isWatchingList(list) && list.service === service ? list : null;
+}
+
+/** Retire l'entrée d'un service du cache, sans verrou (les verrous Web Locks ne sont pas réentrants). */
+async function removeCachedWatching(service: TrackerId): Promise<void> {
+  const stored = await chrome.storage.local.get(STORAGE_KEYS.watchingCache);
+  const cache: unknown = stored[STORAGE_KEYS.watchingCache];
+  if (!isRecord(cache) || !(service in cache)) return;
+  const { [service]: _removed, ...rest } = cache;
+  await chrome.storage.local.set({ [STORAGE_KEYS.watchingCache]: rest });
+}
+
+export function saveCachedWatching(list: WatchingList): Promise<void> {
+  return withStorageLock(async () => {
+    const stored = await chrome.storage.local.get(STORAGE_KEYS.watchingCache);
+    const cache: unknown = stored[STORAGE_KEYS.watchingCache];
+    await chrome.storage.local.set({ [STORAGE_KEYS.watchingCache]: { ...(isRecord(cache) ? cache : {}), [list.service]: list } });
+  });
 }

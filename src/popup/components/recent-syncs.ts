@@ -1,7 +1,8 @@
 import type { RecentSync } from '../../shared/review.types';
-import { h } from '../../ui/dom';
-import { renderAlert } from './alert';
+import { h, nodes } from '../../ui/dom';
 import { icon } from '../../ui/icons';
+import { renderAlert } from './alert';
+import { BTN_GHOST, CARD, sectionTitle } from './ui';
 
 interface RecentSyncsProps {
   syncs: RecentSync[];
@@ -14,32 +15,37 @@ interface RecentSyncsProps {
 
 function episodeNumber(sync: RecentSync): string {
   const n = sync.episode.displayedEpisodeNumber ?? sync.episode.seasonEpisodeNumber;
-  return n !== null ? `E${n}` : '';
+  return n !== null ? ` · E${n}` : '';
 }
 
-export function renderRecentSyncs({ syncs, pendingKeys, busyKey, error, onCorrect }: RecentSyncsProps): HTMLElement | null {
-  if (syncs.length === 0) return null;
-
+export function renderRecentSyncs({ syncs, pendingKeys, busyKey, error, onCorrect }: RecentSyncsProps): HTMLElement {
   const rows = syncs.map((sync) => {
     const isPending = pendingKeys.has(sync.key);
     const isBusy = busyKey === sync.key;
+    const title = `${sync.episode.animeTitle}${episodeNumber(sync)}`;
     return h(
       'li',
-      { class: 'flex items-center gap-2 px-3 py-2' },
+      { class: 'flex min-h-[52px] items-center gap-2 rounded-lg bg-surface py-1.5 pr-1 pl-3' },
+      icon('check', 'h-3.5 w-3.5 text-mint', '3'),
       h(
         'div',
-        { class: 'min-w-0 flex-1' },
-        h('p', { class: 'truncate text-xs text-zinc-200' }, `${sync.episode.animeTitle} · ${episodeNumber(sync)}`),
-        h('p', { class: 'truncate text-[10px] text-zinc-500', attrs: { title: sync.mediaTitle } }, `→ ${sync.mediaTitle} · épisode ${sync.progress}`),
+        { class: 'flex min-w-0 flex-1 flex-col gap-0.5' },
+        h('span', { class: 'truncate text-[13px] font-bold', attrs: { title } }, title),
+        h('span', { class: 'truncate text-[11px] font-semibold text-muted', attrs: { title: sync.mediaTitle } }, `→ ${sync.mediaTitle} · épisode ${sync.progress}`),
       ),
       h(
         'button',
         {
-          class: 'flex shrink-0 cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-zinc-400 hover:bg-zinc-800 hover:text-sky-300 disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent disabled:hover:text-zinc-400',
-          attrs: { type: 'button', ...(isPending || busyKey !== null ? { disabled: '' } : {}) },
+          class: `${BTN_GHOST} px-2.5 text-sakura`,
+          attrs: {
+            type: 'button',
+            'aria-label': isPending ? `${title} : déjà à vérifier` : `Corriger ${title}`,
+            'data-focus': `correct-${sync.key}`,
+            ...(isPending || busyKey !== null ? { disabled: '' } : {}),
+          },
           on: { click: () => onCorrect(sync.key) },
         },
-        isBusy && icon('spinner', 'h-3 w-3 animate-spin'),
+        isBusy && icon('spinner', 'h-3 w-3 motion-safe:animate-spin'),
         isPending ? 'À vérifier ↑' : 'Corriger',
       ),
     );
@@ -48,8 +54,12 @@ export function renderRecentSyncs({ syncs, pendingKeys, busyKey, error, onCorrec
   return h(
     'section',
     { class: 'flex flex-col gap-2' },
-    h('h2', { class: 'text-[11px] font-medium uppercase tracking-wide text-zinc-500' }, 'Dernières synchros'),
-    h('ul', { class: 'divide-y divide-zinc-800 rounded-xl bg-zinc-900 ring-1 ring-zinc-800' }, ...rows),
-    error && renderAlert({ message: error }),
+    ...nodes([
+      sectionTitle('Dernières synchros'),
+      rows.length > 0
+        ? h('ul', { class: 'm-0 flex list-none flex-col gap-1 p-0' }, ...rows)
+        : h('p', { class: `${CARD} m-0 p-3 text-[12px] text-muted` }, 'Aucune synchro pour l’instant.'),
+      error && renderAlert({ message: error }),
+    ]),
   );
 }

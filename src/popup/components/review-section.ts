@@ -1,6 +1,8 @@
 import type { PendingReview } from '../../shared/review.types';
 import { h } from '../../ui/dom';
+import { icon } from '../../ui/icons';
 import { createReviewCard, type ReviewActions, type ReviewCard } from './review-card';
+import { CARD, kanaLabel } from './ui';
 
 export interface ReviewSection {
   readonly element: HTMLElement;
@@ -13,16 +15,28 @@ export interface ReviewSection {
  */
 export function createReviewSection(actions: ReviewActions): ReviewSection {
   const cards = new Map<string, ReviewCard>();
-  const title = h('h2', { class: 'text-[11px] font-medium uppercase tracking-wide text-amber-400' });
+  const title = h('h2', { class: 'm-0 text-[13px] font-bold' });
   const list = h('div', { class: 'flex flex-col gap-2' });
-  const element = h('section', { class: 'flex flex-col gap-2' }, title, list);
+  const empty = h(
+    'div',
+    { class: `${CARD} flex items-center gap-2 p-3 text-[12px] text-muted` },
+    icon('check', 'h-3.5 w-3.5 text-mint', '3'),
+    'Rien à vérifier pour le moment.',
+  );
+  const element = h(
+    'section',
+    { class: 'flex flex-col gap-2' },
+    h('div', { class: 'flex items-baseline gap-1.5' }, title, kanaLabel('カクニン', 'text-butter')),
+    list,
+    empty,
+  );
   let pendingCount = 0;
   /** Dernière liste reçue : réappliquée quand une carte occupée se ferme (une vérification a pu arriver entre-temps) */
   let lastReviews: PendingReview[] = [];
 
   function refreshChrome(): void {
     title.textContent = `À vérifier (${pendingCount})`;
-    element.hidden = cards.size === 0;
+    empty.hidden = cards.size > 0;
   }
 
   function update(reviews: PendingReview[]): void {
@@ -56,5 +70,6 @@ export function createReviewSection(actions: ReviewActions): ReviewSection {
     refreshChrome();
   }
 
+  refreshChrome();
   return { element, update };
 }

@@ -2,10 +2,11 @@ import type { EpisodeInfo } from '../../shared/episode.types';
 import { sendMessage } from '../../shared/messages';
 import { failedServices } from '../../shared/sync.types';
 import type { TrackerId } from '../../shared/tracker.types';
-import { DEFAULT_SETTINGS, getSettings, type SyncSettings } from '../../shared/settings';
+import { DEFAULT_SETTINGS, getSettings, type NotificationLevel, type SyncSettings } from '../../shared/settings';
 import type { StreamingAdapter } from '../adapters/adapter';
-import { ALERT_TOAST_MS, toastForOutcome } from '../ui/sync-toast';
-import { showToast, type ToastContent } from '../ui/toast';
+import { isAlertTone, showsProgress } from '../ui/notification-policy';
+import { ALERT_TOAST_MS, RETRY_TOAST_MS, bubbleForOutcome, toastForOutcome } from '../ui/sync-toast';
+import { showToast, type ToastContent, type ToastOptions } from '../ui/toast';
 import { createLogger } from './logger';
 import { trackVideoProgress } from './video-tracker';
 import { waitFor } from './wait-for';
@@ -13,8 +14,6 @@ import { waitFor } from './wait-for';
 const MIN_EPISODE_DURATION_S = 120;
 const VIDEO_WAIT_TIMEOUT_MS = 30_000;
 const METADATA_WAIT_TIMEOUT_MS = 15_000;
-/** Toast d'erreur avec "Réessayer" : laissé plus longtemps pour avoir le temps de cliquer */
-const RETRY_TOAST_MS = 15_000;
 
 const log = createLogger('session');
 
@@ -80,7 +79,7 @@ export function startWatchSession(adapter: StreamingAdapter, episodeId: string):
 
     if (isExtensionContextInvalidated()) {
       log.warn('Extension rechargée depuis l’ouverture de la page : recharge l’onglet pour réactiver SyncKai');
-      showToast({ tone: 'warning', title: 'SyncKai a été mis à jour', message: 'Recharge la page pour synchroniser cet épisode.' }, ALERT_TOAST_MS);
+      showToast({ tone: 'warning', title: 'SyncKai a été mis à jour', message: 'Recharge la page pour synchroniser cet épisode.' }, { autoHideMs: ALERT_TOAST_MS });
       destroy();
       return;
     }
@@ -89,7 +88,7 @@ export function startWatchSession(adapter: StreamingAdapter, episodeId: string):
     const episode = extract() ?? metadata;
     if (!episode) {
       log.error('Épisode terminé mais métadonnées introuvables : complétion non envoyée');
-      showToast({ tone: 'error', title: 'Épisode non identifié', message: 'Impossible de lire les informations de l’épisode sur la page.' }, ALERT_TOAST_MS);
+      showToast({ tone: 'error', title: 'Épisode non identifié', message: 'Impossible de lire les informations de l’épisode sur la page.' }, { autoHideMs: ALERT_TOAST_MS });
       return;
     }
 
@@ -102,40 +101,46 @@ export function startWatchSession(adapter: StreamingAdapter, episodeId: string):
       log.info('Synchronisation en pause (options) : épisode non envoyé');
       return;
     }
-    await syncWithFeedback(episode, settings.showToast);
+    await syncWithFeedback(episode, settings.notificationLevel);
   }
 
   /**
-   * Envoie l'épisode au service worker et affiche le résultat.
-   * Toasts désactivés : seules les alertes (à vérifier, erreurs) restent affichées.
+   * Envoie l'épisode au service worker et affiche le résultat selon le niveau de notification
+   * (voir notification-policy) : les alertes (à vérifier, erreurs) restent toujours affichées.
    * Une erreur (réseau, AniList indisponible…) propose "Réessayer" : l'épisode n'est pas perdu.
    */
-  async function syncWithFeedback(episode: EpisodeInfo, showProgress: boolean, services: TrackerId[] | null = null): Promise<void> {
-    const toast = showProgress
+  async function syncWithFeedback(episode: EpisodeInfo, level: NotificationLevel, services: TrackerId[] | null = null): Promise<void> {
+    const toast = showsProgress(level)
       ? showToast({ tone: 'info', title: 'Synchronisation…', message: formatEpisodeShort(episode) })
       : null;
-    const notify = (content: ToastContent, autoHideMs: number): void => {
-      if (toast) toast.update(content, autoHideMs);
-      else if (content.tone === 'warning' || content.tone === 'error') showToast(content, autoHideMs);
+    const notify = (content: ToastContent, options: ToastOptions): void => {
+      if (toast) toast.update(content, options);
+      else if (isAlertTone(content.tone)) showToast(content, options);
     };
 
     try {
       const outcome = await sendMessage('EPISODE_COMPLETED', { episode, services });
       log.info('Résultat de la synchronisation :', outcome);
-      const { content, autoHideMs } = toastForOutcome(outcome);
       // Échec global → tout relancer ; échec partiel → seulement les services en erreur
       const retry = outcome.status === 'error' ? null : failedServices(outcome);
       if (retry === null || retry.length > 0) {
-        // Nouvelle tentative explicite : le toast de progression est forcé pour voir le résultat
-        const action = { label: 'Réessayer', onClick: () => void syncWithFeedback(episode, true, retry) };
-        notify({ ...content, action }, RETRY_TOAST_MS);
+        // Nouvelle tentative explicite : mode détaillé forcé pour voir la progression et le résultat
+        const action = { label: 'Réessayer', onClick: () => void syncWithFeedback(episode, 'detailed', retry) };
+        notify({ ...bubbleForOutcome(outcome), action }, { variant: 'bubble', autoHideMs: RETRY_TOAST_MS });
+        return;
+      }
+      const result = toastForOutcome(outcome, level, document.fullscreenElement !== null);
+      if (result) {
+        // Pas de toast de progression (discret) : la pastille de succès est créée ici
+        if (toast) toast.update(result.content, { variant: result.variant, autoHideMs: result.autoHideMs });
+        else showToast(result.content, { variant: result.variant, autoHideMs: result.autoHideMs });
       } else {
-        notify(content, autoHideMs);
+        toast?.dismiss();
       }
     } catch (error: unknown) {
       completionReported = false;
       log.error('Service worker injoignable :', error);
-      notify({ tone: 'error', title: 'SyncKai injoignable', message: 'Recharge la page puis réessaie.' }, ALERT_TOAST_MS);
+      notify({ tone: 'error', title: 'SyncKai injoignable', message: 'Recharge la page puis réessaie.' }, { variant: 'bubble', autoHideMs: ALERT_TOAST_MS });
     }
   }
 

@@ -1,6 +1,16 @@
+import type { StreamingPlatform } from './episode.types';
 import { isRecord } from './guards';
 
 export type CompletionTrigger = 'credits' | 'percentage';
+
+/**
+ * Notifications affichées sur la page de lecture :
+ * - discreet    : petite pastille de succès 3 s (rien en plein écran), aucun toast de progression
+ * - detailed    : bulle complète avec le résultat par service
+ * - alerts-only : uniquement quand il faut agir (à vérifier, erreur, reconnexion)
+ * Les alertes s'affichent dans tous les cas.
+ */
+export type NotificationLevel = 'discreet' | 'detailed' | 'alerts-only';
 
 export interface SyncSettings {
   /** Synchronisation automatique active (false = pause) */
@@ -9,19 +19,24 @@ export interface SyncSettings {
   completionTrigger: CompletionTrigger;
   /** Pourcentage de la vidéo (repli, ou déclencheur unique en mode "percentage") */
   completionPercentage: number;
-  showToast: boolean;
+  notificationLevel: NotificationLevel;
+  /** Plateforme ouverte par « Ouvrir » quand l'anime est disponible sur plusieurs plateformes */
+  preferredPlayer: StreamingPlatform;
 }
 
 export const DEFAULT_SETTINGS: SyncSettings = {
   autoSync: true,
   completionTrigger: 'credits',
   completionPercentage: 85,
-  showToast: true,
+  notificationLevel: 'discreet',
+  preferredPlayer: 'crunchyroll',
 };
 
 export const PERCENTAGE_RANGE = { min: 70, max: 98 } as const;
 
 const SETTINGS_KEY = 'settings';
+const NOTIFICATION_LEVELS: readonly NotificationLevel[] = ['discreet', 'detailed', 'alerts-only'];
+const PLAYERS: readonly StreamingPlatform[] = ['crunchyroll', 'adn'];
 
 /**
  * Complète et borne des réglages lus du stockage : les valeurs absentes ou invalides
@@ -34,6 +49,10 @@ export function normalizeSettings(raw: unknown): SyncSettings {
       ? Math.min(PERCENTAGE_RANGE.max, Math.max(PERCENTAGE_RANGE.min, Math.round(value.completionPercentage)))
       : DEFAULT_SETTINGS.completionPercentage;
 
+  // Migration ≤ 1.3 : "showToast: false" correspondait à n'afficher que les alertes
+  const legacyLevel: NotificationLevel | null = value.showToast === false ? 'alerts-only' : null;
+  const notificationLevel = NOTIFICATION_LEVELS.find((level) => level === value.notificationLevel) ?? legacyLevel ?? DEFAULT_SETTINGS.notificationLevel;
+
   return {
     autoSync: typeof value.autoSync === 'boolean' ? value.autoSync : DEFAULT_SETTINGS.autoSync,
     completionTrigger:
@@ -41,7 +60,8 @@ export function normalizeSettings(raw: unknown): SyncSettings {
         ? value.completionTrigger
         : DEFAULT_SETTINGS.completionTrigger,
     completionPercentage: percentage,
-    showToast: typeof value.showToast === 'boolean' ? value.showToast : DEFAULT_SETTINGS.showToast,
+    notificationLevel,
+    preferredPlayer: PLAYERS.find((p) => p === value.preferredPlayer) ?? DEFAULT_SETTINGS.preferredPlayer,
   };
 }
 
@@ -55,3 +75,5 @@ export async function getSettings(): Promise<SyncSettings> {
 export async function saveSettings(settings: SyncSettings): Promise<void> {
   await chrome.storage.local.set({ [SETTINGS_KEY]: normalizeSettings(settings) });
 }
+
+export const SETTINGS_STORAGE_KEY = SETTINGS_KEY;
