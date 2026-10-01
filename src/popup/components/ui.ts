@@ -127,20 +127,28 @@ interface SegmentedProps<T extends string> {
   focusKey: string;
   activeClass: string;
   trackClass?: string;
+  /** Groupe inactif (réglage dépendant désactivé) */
+  disabled?: boolean;
 }
 
 /** Contrôle segmenté (boutons aria-pressed) */
-export function segmented<T extends string>({ options, current, onPick, attrs, focusKey, activeClass, trackClass = 'bg-surface' }: SegmentedProps<T>): HTMLElement {
+export function segmented<T extends string>({ options, current, onPick, attrs, focusKey, activeClass, trackClass = 'bg-surface', disabled = false }: SegmentedProps<T>): HTMLElement {
   return h(
     'div',
-    { class: `flex h-8 shrink-0 gap-0.5 rounded-full p-0.5 ${trackClass}`, attrs: { role: 'group', ...attrs } },
+    { class: `flex h-8 shrink-0 gap-0.5 rounded-full p-0.5 ${trackClass} ${disabled ? 'opacity-50' : ''}`, attrs: { role: 'group', ...attrs } },
     ...options.map((opt) => {
       const on = opt.value === current;
       return h(
         'button',
         {
-          class: `h-7 cursor-pointer rounded-full px-3 text-[11px] transition-colors ${on ? `${activeClass} font-bold text-on-fill` : 'font-semibold text-muted hover:text-ink'}`,
-          attrs: { type: 'button', 'aria-pressed': String(on), 'data-focus': `${focusKey}-${opt.value}`, ...(opt.aria ? { 'aria-label': opt.aria } : {}) },
+          class: `h-7 cursor-pointer rounded-full px-3 text-[11px] transition-colors disabled:cursor-default ${on ? `${activeClass} font-bold text-on-fill` : 'font-semibold text-muted hover:text-ink disabled:hover:text-muted'}`,
+          attrs: {
+            type: 'button',
+            'aria-pressed': String(on),
+            'data-focus': `${focusKey}-${opt.value}`,
+            ...(opt.aria ? { 'aria-label': opt.aria } : {}),
+            ...(disabled ? { disabled: '' } : {}),
+          },
           on: { click: () => !on && onPick(opt.value) },
         },
         opt.label,

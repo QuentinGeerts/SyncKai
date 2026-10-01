@@ -19,18 +19,33 @@ export interface ToastContent {
   lines?: ToastLine[];
   /** Bouton d'action (ex : "Réessayer") */
   action?: { label: string; onClick: () => void };
+  /** Contrôle interactif sous le texte (bulle uniquement, ex : notation) */
+  body?: Node;
+  /** Boutons alignés à droite, après `action` : principal (sakura) ou discret */
+  actions?: ToastAction[];
 }
+
+export interface ToastAction {
+  label: string;
+  kind: 'primary' | 'ghost';
+  onClick: () => void;
+}
+
+/** close : bouton × ; timeout : fermeture automatique ; replaced : un autre toast prend la place ; programmatic : dismiss() */
+export type ToastDismissReason = 'close' | 'timeout' | 'replaced' | 'programmatic';
 
 export interface ToastOptions {
   variant?: ToastVariant;
   /** Fermeture automatique (sinon le toast reste affiché) */
   autoHideMs?: number;
+  /** Appelé une fois à la fermeture ; une mise à jour sans ce rappel l'annule */
+  onDismiss?: (reason: ToastDismissReason) => void;
 }
 
 export interface ToastHandle {
   /** Remplace le contenu (et éventuellement la forme) du toast */
   update(content: ToastContent, options?: ToastOptions): void;
-  dismiss(): void;
+  dismiss(reason?: ToastDismissReason): void;
 }
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -74,12 +89,26 @@ const STYLES = `
   .dot.error { background: var(--danger); }
   .line-label { font-weight: 700; }
   .line-text { color: var(--muted); overflow-wrap: anywhere; }
-  .actions { display: flex; justify-content: flex-end; }
+  .actions { display: flex; justify-content: flex-end; gap: 4px; }
+  .slot { display: flex; padding-left: 30px; }
   .action {
     height: 30px; padding: 0 14px; border: none; border-radius: 999px; background: var(--sakura); color: var(--on-fill);
     box-shadow: var(--sticker); font: 700 12px/1 ${FONT_STACK}; cursor: pointer;
   }
   .action:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.45); }
+  .action.ghost { background: transparent; color: var(--muted); box-shadow: none; }
+  .action.ghost:hover { background: var(--border); color: var(--text); }
+  .action.ghost:active { transform: none; }
+
+  /* Notation 10 étoiles (boutons demi-étoile, voir ui/star-rating) : étoile de 18 px, zone cliquable de 24 px de haut */
+  .stars { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .stars-row { display: flex; flex: none; }
+  .star { width: 18px; height: 24px; }
+  .stars-value { flex: none; min-width: 36px; font-weight: 800; font-size: 12px; line-height: 16px; font-variant-numeric: tabular-nums; color: var(--butter); }
+  .star-outline { fill: none; stroke: var(--muted); stroke-width: 1.6; }
+  .star-fill { fill: var(--butter); stroke: var(--butter); stroke-width: 1.6; }
+  .star-half { cursor: pointer; border-radius: 4px; }
+  .star-half:focus-visible { outline: 2px solid var(--lavender); outline-offset: -2px; }
   .close {
     flex: none; width: 28px; height: 28px; margin: -4px -2px 0 0; padding: 0; border: none; border-radius: 999px;
     background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer;
@@ -187,6 +216,13 @@ function renderPill(toast: HTMLElement, content: ToastContent): void {
   if (content.message) toast.append(el('span', 'message', `· ${content.message}`));
 }
 
+function actionButton(label: string, kind: ToastAction['kind'], onClick: () => void): HTMLButtonElement {
+  const button = el('button', kind === 'ghost' ? 'action ghost' : 'action', label);
+  button.type = 'button';
+  button.onclick = () => onClick();
+  return button;
+}
+
 function renderBubble(toast: HTMLElement, content: ToastContent, onClose: () => void): void {
   const head = el('div', 'head');
   const body = el('div', 'body');
@@ -216,13 +252,19 @@ function renderBubble(toast: HTMLElement, content: ToastContent, onClose: () => 
     toast.append(list);
   }
 
-  if (content.action) {
-    const { onClick, label } = content.action;
+  if (content.body) {
+    const slot = el('div', 'slot');
+    slot.append(content.body);
+    toast.append(slot);
+  }
+
+  const buttons = [
+    ...(content.action ? [actionButton(content.action.label, 'primary', content.action.onClick)] : []),
+    ...(content.actions ?? []).map((a) => actionButton(a.label, a.kind, a.onClick)),
+  ];
+  if (buttons.length > 0) {
     const actions = el('div', 'actions');
-    const button = el('button', 'action', label);
-    button.type = 'button';
-    button.onclick = () => onClick();
-    actions.append(button);
+    actions.append(...buttons);
     toast.append(actions);
   }
   toast.append(tailIcon());
@@ -237,7 +279,7 @@ function isAlert(tone: ToastTone): boolean {
  * En plein écran, seul l'élément plein écran est visible : le toast y est donc déplacé.
  */
 export function showToast(content: ToastContent, options: ToastOptions = {}): ToastHandle {
-  current?.dismiss();
+  current?.dismiss('replaced');
 
   const host = document.createElement('div');
   const shadow = host.attachShadow({ mode: 'closed' });
@@ -249,6 +291,7 @@ export function showToast(content: ToastContent, options: ToastOptions = {}): To
 
   const controller = new AbortController();
   let hideTimer: ReturnType<typeof setTimeout> | undefined;
+  let onDismiss: ToastOptions['onDismiss'];
 
   const attach = (): void => {
     (document.fullscreenElement ?? document.body).append(host);
@@ -267,14 +310,16 @@ export function showToast(content: ToastContent, options: ToastOptions = {}): To
       toast.className = `toast visible ${variant} ${next.tone}`;
       toast.setAttribute('role', next.tone === 'error' ? 'alert' : 'status');
       if (variant === 'pill') renderPill(toast, next);
-      else renderBubble(toast, next, () => handle.dismiss());
+      else renderBubble(toast, next, () => handle.dismiss('close'));
 
+      onDismiss = nextOptions.onDismiss;
       clearTimeout(hideTimer);
-      if (nextOptions.autoHideMs !== undefined) hideTimer = setTimeout(() => handle.dismiss(), nextOptions.autoHideMs);
+      if (nextOptions.autoHideMs !== undefined) hideTimer = setTimeout(() => handle.dismiss('timeout'), nextOptions.autoHideMs);
     },
-    dismiss() {
+    dismiss(reason = 'programmatic') {
       if (controller.signal.aborted) return;
       controller.abort();
+      onDismiss?.(reason);
       clearTimeout(hideTimer);
       toast.classList.remove('visible');
       setTimeout(() => host.remove(), 200); // Laisse la transition de sortie se terminer

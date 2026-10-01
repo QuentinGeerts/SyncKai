@@ -14,6 +14,9 @@ describe('normalizeSettings', () => {
       completionPercentage: 90,
       notificationLevel: 'detailed',
       preferredPlayer: 'adn',
+      ratingPrompt: false,
+      airingAlerts: false,
+      airingDelayHours: 3,
     } as const;
     expect(normalizeSettings(settings)).toEqual(settings);
   });

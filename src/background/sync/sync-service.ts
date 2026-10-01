@@ -13,6 +13,9 @@ import {
   saveMediaMapping,
   savePendingReview,
 } from '../../shared/storage';
+import { isRewatchDeclined } from '../../shared/engagement-store';
+import type { MediaRef, SyncPrompts } from '../../shared/engagement.types';
+import { getSettings } from '../../shared/settings';
 import type { ServiceResult, SyncOutcome } from '../../shared/sync.types';
 import { TRACKER_LABELS, type TrackerId } from '../../shared/tracker.types';
 import { ApiError } from '../api/errors';
@@ -28,7 +31,6 @@ const MAX_SEARCH_RESULTS = 10;
 
 const SKIP_REASONS = {
   'already-completed': 'Déjà marqué comme terminé',
-  repeating: 'Revisionnage en cours : progression non modifiée',
 } as const;
 
 /** Convertit une erreur en résultat affichable (les handlers de messages ne lèvent jamais). */
@@ -58,16 +60,22 @@ export async function getCatalogMedia(mediaId: number): Promise<CatalogMedia> {
   return { mediaId, idMal: media.idMal, title: media.displayTitle, episodes: media.episodes };
 }
 
+/** Résultat d'écriture sur un service + fiche déjà terminée (déclenche la proposition de revisionnage) */
+interface ServiceWrite {
+  result: ServiceResult;
+  alreadyCompleted: boolean;
+}
+
 /** Applique les règles métier et écrit sur UN service. Ne lève jamais : l'échec est un résultat. */
 async function writeToService(
   tracker: TrackerService,
   catalog: CatalogMedia,
   progress: number,
   isCorrection: boolean,
-): Promise<ServiceResult> {
+): Promise<ServiceWrite> {
   const label = TRACKER_LABELS[tracker.id];
   const id = tracker.resolveId(catalog);
-  if (id === null) return { service: tracker.id, outcome: { status: 'skipped', reason: 'Pas de fiche équivalente' } };
+  if (id === null) return { result: { service: tracker.id, outcome: { status: 'skipped', reason: 'Pas de fiche équivalente' } }, alreadyCompleted: false };
 
   try {
     // Lecture fraîche juste avant l'écriture (la liste a pu changer depuis un autre appareil)
@@ -75,8 +83,11 @@ async function writeToService(
     // Découpage différent entre services : on n'écrit pas au-delà de la fiche de ce service
     if (current.episodes !== null && progress > current.episodes) {
       return {
-        service: tracker.id,
-        outcome: { status: 'skipped', reason: `Épisode ${progress} au-delà des ${current.episodes} épisodes de la fiche` },
+        result: {
+          service: tracker.id,
+          outcome: { status: 'skipped', reason: `Épisode ${progress} au-delà des ${current.episodes} épisodes de la fiche` },
+        },
+        alreadyCompleted: false,
       };
     }
 
@@ -84,23 +95,53 @@ async function writeToService(
     if (decision.action === 'skip') {
       console.info(LOG_PREFIX, `${label} : pas de mise à jour (${decision.reason})`, current);
       return {
-        service: tracker.id,
-        outcome:
-          decision.reason === 'up-to-date'
-            ? { status: 'up-to-date', progress: current.entry?.progress ?? progress }
-            : { status: 'skipped', reason: SKIP_REASONS[decision.reason] },
+        result: {
+          service: tracker.id,
+          outcome:
+            decision.reason === 'up-to-date'
+              ? { status: 'up-to-date', progress: current.entry?.progress ?? progress }
+              : { status: 'skipped', reason: SKIP_REASONS[decision.reason] },
+        },
+        alreadyCompleted: decision.reason === 'already-completed',
       };
     }
 
-    const saved = await tracker.saveProgress(id, decision.progress, decision.status);
+    const saved = await tracker.saveProgress(id, decision.progress, decision.status, decision.repeat);
     console.info(LOG_PREFIX, `✔ ${label} : ${current.title} → épisode ${saved.progress} (${saved.status})`);
-    return { service: tracker.id, outcome: { status: 'updated', progress: saved.progress, completed: saved.status === 'COMPLETED' } };
+    return {
+      result: { service: tracker.id, outcome: { status: 'updated', progress: saved.progress, completed: saved.status === 'COMPLETED' } },
+      alreadyCompleted: false,
+    };
   } catch (error: unknown) {
     console.error(LOG_PREFIX, `${label} : échec`, error);
     return {
-      service: tracker.id,
-      outcome: error instanceof ApiError ? { status: 'error', message: error.message, code: error.code } : { status: 'error', message: 'Erreur inattendue.' },
+      result: {
+        service: tracker.id,
+        outcome: error instanceof ApiError ? { status: 'error', message: error.message, code: error.code } : { status: 'error', message: 'Erreur inattendue.' },
+      },
+      alreadyCompleted: false,
     };
+  }
+}
+
+/**
+ * Demandes à afficher après l'écriture : note (série passée en Terminé, si activée) et
+ * revisionnage (épisode vu sur une fiche déjà terminée, sauf refus récent). Ne lève jamais.
+ */
+async function buildPrompts(catalog: CatalogMedia, progress: number, writes: readonly ServiceWrite[]): Promise<SyncPrompts | undefined> {
+  try {
+    const ref: MediaRef = { mediaId: catalog.mediaId, malId: catalog.idMal, title: catalog.title };
+    const prompts: SyncPrompts = {};
+    const justCompleted = writes.some(({ result }) => result.outcome.status === 'updated' && result.outcome.completed);
+    if (justCompleted && (await getSettings()).ratingPrompt) prompts.rate = ref;
+    // Revoir le dernier épisode seul n'est pas un revisionnage : il ne pourrait jamais se terminer
+    const isFinale = catalog.episodes !== null && progress >= catalog.episodes;
+    if (!isFinale && writes.some((w) => w.alreadyCompleted) && !(await isRewatchDeclined(ref))) prompts.rewatch = { ...ref, progress };
+    return prompts.rate || prompts.rewatch ? prompts : undefined;
+  } catch (error: unknown) {
+    // Demandes facultatives : un échec de lecture du stockage n'affecte pas la synchro
+    console.warn(LOG_PREFIX, 'Demandes après synchro indisponibles :', error);
+    return undefined;
   }
 }
 
@@ -124,7 +165,8 @@ async function writeToServices(
   const trackers = await getConnectedTrackers(options.only ?? null);
   if (trackers.length === 0) return { status: 'not-connected' };
 
-  const results = await Promise.all(trackers.map((t) => writeToService(t, catalog, progress, options.isCorrection ?? false)));
+  const writes = await Promise.all(trackers.map((t) => writeToService(t, catalog, progress, options.isCorrection ?? false)));
+  const results = writes.map((w) => w.result);
 
   if (results.some((r) => r.outcome.status === 'updated')) {
     await addRecentSync({ key, episode, mediaId: catalog.mediaId, mediaTitle: catalog.title, progress, syncedAt: Date.now() });
@@ -136,7 +178,8 @@ async function writeToServices(
     await deletePendingReview(key);
     await refreshReviewBadge();
   }
-  return { status: 'synced', mediaTitle: catalog.title, results };
+  const prompts = await buildPrompts(catalog, progress, writes);
+  return { status: 'synced', mediaTitle: catalog.title, results, ...(prompts ? { prompts } : {}) };
 }
 
 /**

@@ -1,4 +1,5 @@
 import type { AniListViewer } from '../shared/anilist.types';
+import type { PendingRating } from '../shared/engagement.types';
 import type { MalViewer } from '../shared/mal.types';
 import type { PendingReview, RecentSync } from '../shared/review.types';
 import type { ExcludedSeries } from '../shared/exclusions';
@@ -104,4 +105,16 @@ export function createStore<T>(initial: T): Store<T> {
       return () => listeners.delete(listener);
     },
   };
+}
+
+/** Activité › « À noter » (notes de fin de série reportées) */
+export interface RatingsState {
+  items: PendingRating[];
+  /** Cartes dont la note est en cours d'envoi */
+  busyIds: ReadonlySet<string>;
+  /** Échec du dernier envoi, par carte */
+  errors: ReadonlyMap<string, string>;
+  /** Confirmation de la dernière note (la carte a quitté la liste) */
+  notice: InlineFeedback | null;
+  error: string | null;
 }

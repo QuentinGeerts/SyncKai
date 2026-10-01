@@ -6,6 +6,7 @@ import { isPendingReview, isRecentSync, type PendingReview, type RecentSync } fr
 import { isMediaMapping, type MediaMapping } from './sync.types';
 import type { TrackerId } from './tracker.types';
 import { SYNC_QUEUE_KEY } from './sync-queue-store';
+import { PENDING_RATINGS_KEY, REWATCH_DECLINED_KEY } from './engagement-store';
 import { isWatchingList, type WatchingList } from './watching.types';
 
 const MAX_PENDING_REVIEWS = 20;
@@ -139,7 +140,7 @@ export function clearAniListSession(): Promise<void> {
  * service de suivi n'est connecté (déconnexion du dernier compte).
  */
 export function clearUserSyncData(): Promise<void> {
-  return withStorageLock(() => chrome.storage.local.remove([STORAGE_KEYS.pendingReviews, STORAGE_KEYS.recentSyncs, STORAGE_KEYS.watchingCache, SYNC_QUEUE_KEY]));
+  return withStorageLock(() => chrome.storage.local.remove([STORAGE_KEYS.pendingReviews, STORAGE_KEYS.recentSyncs, STORAGE_KEYS.watchingCache, SYNC_QUEUE_KEY, PENDING_RATINGS_KEY, REWATCH_DECLINED_KEY]));
 }
 
 // ─── Session MyAnimeList ──────────────────────────────────────────────────

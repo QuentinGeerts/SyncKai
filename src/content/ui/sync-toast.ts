@@ -1,6 +1,6 @@
 import type { NotificationLevel } from '../../shared/settings';
 import { describeOutcome, describeServiceOutcome } from '../../shared/sync-feedback';
-import type { ServiceOutcome, SyncOutcome } from '../../shared/sync.types';
+import type { ServiceOutcome, ServiceResult, SyncOutcome } from '../../shared/sync.types';
 import { TRACKER_LABELS } from '../../shared/tracker.types';
 import { decideExcludedNotification, decideNotification, isAlertTone } from './notification-policy';
 import type { ToastContent, ToastLine, ToastLineTone, ToastVariant } from './toast';
@@ -69,4 +69,55 @@ export function toastForOutcome(outcome: SyncOutcome, level: NotificationLevel, 
     case 'bubble':
       return { content: bubbleForOutcome(outcome), variant: 'bubble', autoHideMs: isAlertTone(tone) ? ALERT_TOAST_MS : SUCCESS_TOAST_MS };
   }
+}
+
+// ─── Note de fin de série et revisionnage ───────────────────────────────────
+
+/** Bulle de note : sans réponse au bout de 20 s, la note est reportée (carte « À noter ») */
+export const RATING_PROMPT_MS = 20_000;
+/** Bulle de revisionnage : sans réponse au bout de 15 s, rien n'est fait */
+export const REWATCH_PROMPT_MS = 15_000;
+
+export interface EngagementResultCopy {
+  /** Pastille de succès : « Note 8,5/10 enregistrée » */
+  success: string;
+  /** Titre de la bulle d'échec : « Note non enregistrée » */
+  failure: string;
+  mediaTitle: string;
+}
+
+function engagementLine(result: ServiceResult): ToastLine {
+  const { outcome } = result;
+  const label = TRACKER_LABELS[result.service];
+  switch (outcome.status) {
+    case 'updated':
+    case 'up-to-date':
+      return { label, text: 'enregistré', tone: 'ok' };
+    case 'skipped':
+      return { label, text: outcome.reason.charAt(0).toLowerCase() + outcome.reason.slice(1), tone: 'warning' };
+    case 'error':
+      return { label, text: `échec : ${outcome.message}`, tone: 'error' };
+  }
+}
+
+/**
+ * Résultat d'une note ou d'un revisionnage : pastille si tous les services ont réussi,
+ * sinon bulle (détail par service) ; `ok` = rien à relancer.
+ */
+export function engagementResultToast(outcome: SyncOutcome, copy: EngagementResultCopy): OutcomeToast & { ok: boolean } {
+  if (outcome.status === 'synced') {
+    const written = outcome.results.filter((r) => r.outcome.status === 'updated' || r.outcome.status === 'up-to-date').length;
+    if (written > 0 && written === outcome.results.length) {
+      return { ok: true, content: { tone: 'success', title: copy.success, message: copy.mediaTitle }, variant: 'pill', autoHideMs: PILL_TOAST_MS };
+    }
+    const failed = outcome.results.some((r) => r.outcome.status === 'error');
+    return {
+      ok: !failed,
+      content: { tone: written > 0 || !failed ? 'warning' : 'error', title: copy.failure, message: copy.mediaTitle, lines: outcome.results.map(engagementLine) },
+      variant: 'bubble',
+      autoHideMs: failed ? RETRY_TOAST_MS : ALERT_TOAST_MS,
+    };
+  }
+  const message = outcome.status === 'error' ? outcome.message : (describeOutcome(outcome).message ?? copy.mediaTitle);
+  return { ok: false, content: { tone: 'error', title: copy.failure, message }, variant: 'bubble', autoHideMs: RETRY_TOAST_MS };
 }

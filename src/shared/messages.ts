@@ -1,3 +1,4 @@
+import type { AiringCheckResult } from './airing.types';
 import type { AniListErrorCode, ViewerResult } from './anilist.types';
 import type { AuthResult } from './auth.types';
 import { isEpisodeInfo, type EpisodeInfo } from './episode.types';
@@ -8,6 +9,7 @@ import type { MalViewerResult } from './mal.types';
 import type { SyncOutcome } from './sync.types';
 import { isTrackerId, type TrackerId } from './tracker.types';
 import type { WatchingResult } from './watching.types';
+import { isMediaRef, isScore10, type MediaRef, type Score10 } from './engagement.types';
 
 export interface AdjustProgressPayload {
   /** Fiche AniList (catalogue) ; null pour une entrée MAL sans équivalent AniList */
@@ -44,6 +46,16 @@ export interface MessageMap {
   ADJUST_PROGRESS: { payload: AdjustProgressPayload; response: SyncOutcome };
   /** « Réessayer » sur une synchro en échec de la file (Activité) */
   RETRY_QUEUED: { payload: { id: string }; response: SyncOutcome };
+  /** Note sur 10 (pas 0,5), convertie et écrite sur chaque service connecté ; retire la carte « À noter » */
+  RATE_MEDIA: { payload: { media: MediaRef; score: Score10 }; response: SyncOutcome };
+  /** « Plus tard » : crée la carte « À noter » */
+  DEFER_RATING: { payload: { media: MediaRef; coverUrl: string | null }; response: Result<null, AniListErrorCode> };
+  /** « Oui » au revisionnage : REPEATING + progression sur chaque service */
+  START_REWATCH: { payload: { media: MediaRef; progress: number }; response: SyncOutcome };
+  /** « Non » au revisionnage : ne plus demander pendant 30 jours */
+  DECLINE_REWATCH: { payload: { media: MediaRef }; response: Result<null, AniListErrorCode> };
+  /** « Vérifier maintenant » : vérification manuelle des sorties (même fenêtre / dédoublonnage que l'alarme) */
+  CHECK_AIRING: { payload: null; response: AiringCheckResult };
 }
 
 /** Messages réservés aux pages de l'extension (popup) : refusés s'ils viennent d'un content script */
@@ -56,6 +68,7 @@ export const EXTENSION_PAGE_ONLY: ReadonlySet<MessageType> = new Set([
   'GET_WATCHING',
   'ADJUST_PROGRESS',
   'RETRY_QUEUED',
+  'CHECK_AIRING',
 ]);
 
 export type MessageType = keyof MessageMap;
@@ -91,6 +104,11 @@ const isAdjustProgressPayload = (p: unknown): p is AdjustProgressPayload =>
   (p.mediaId !== null || p.malId !== null) &&
   (p.delta === 1 || p.delta === -1);
 const isRetryQueuedPayload = (p: unknown): p is { id: string } => isRecord(p) && isKey(p.id);
+const isRatePayload = (p: unknown): p is { media: MediaRef; score: Score10 } => isRecord(p) && isMediaRef(p.media) && isScore10(p.score);
+const isDeferRatingPayload = (p: unknown): p is { media: MediaRef; coverUrl: string | null } =>
+  isRecord(p) && isMediaRef(p.media) && (p.coverUrl === null || (typeof p.coverUrl === 'string' && p.coverUrl.length <= 2000));
+const isRewatchPayload = (p: unknown): p is { media: MediaRef; progress: number } => isRecord(p) && isMediaRef(p.media) && isPositiveInt(p.progress);
+const isMediaPayload = (p: unknown): p is { media: MediaRef } => isRecord(p) && isMediaRef(p.media);
 const isReopenReviewPayload = (p: unknown): p is { key: string } => isRecord(p) && isKey(p.key);
 
 // Record exhaustif : TypeScript impose un validateur de payload pour chaque MessageType
@@ -106,6 +124,11 @@ const PAYLOAD_GUARDS: { [K in MessageType]: (payload: unknown) => payload is Mes
   GET_WATCHING: isWatchingPayload,
   ADJUST_PROGRESS: isAdjustProgressPayload,
   RETRY_QUEUED: isRetryQueuedPayload,
+  RATE_MEDIA: isRatePayload,
+  DEFER_RATING: isDeferRatingPayload,
+  START_REWATCH: isRewatchPayload,
+  DECLINE_REWATCH: isMediaPayload,
+  CHECK_AIRING: isNull,
 };
 
 /** Valide le type ET le payload d'un message reçu (les content scripts tournent sur des pages tierces). */

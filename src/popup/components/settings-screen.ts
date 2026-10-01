@@ -1,7 +1,10 @@
+import { formatAiringStatus, type AiringCheckResult } from '../../shared/airing.types';
 import type { AniListViewer } from '../../shared/anilist.types';
 import type { StreamingPlatform } from '../../shared/episode.types';
 import { includeSeries, type ExcludedSeries } from '../../shared/exclusions';
+import { sendMessage } from '../../shared/messages';
 import type { MalViewer } from '../../shared/mal.types';
+import { AIRING_DELAYS, type AiringDelayHours } from '../../shared/engagement.types';
 import { normalizeSettings, PERCENTAGE_RANGE, saveSettings, type NotificationLevel, type SyncSettings } from '../../shared/settings';
 import { clearMediaMappings, deleteMediaMapping, getMediaMappings } from '../../shared/storage';
 import type { MediaMapping } from '../../shared/sync.types';
@@ -40,6 +43,8 @@ export interface SettingsScreen {
   updateSettings(state: SettingsState): void;
   refreshMappings(): Promise<void>;
   updateExclusions(state: ExclusionsState): void;
+  /** Dernier résumé de vérification des sorties (`airingLastResult`) ; `now` pour le « il y a… » */
+  updateAiring(result: AiringCheckResult | null, now: number): void;
 }
 
 // ─── Contrôles ────────────────────────────────────────────────────────────
@@ -90,6 +95,15 @@ const NOTIFICATION_OPTIONS: readonly { value: NotificationLevel; title: string; 
   { value: 'detailed', title: 'Détaillées', desc: 'Bulle complète avec le résultat AniList et MyAnimeList.', glyph: 'bubble', recommended: false },
   { value: 'alerts-only', title: 'Alertes seulement', desc: 'Uniquement s’il faut agir : à vérifier, erreur, reconnexion.', glyph: 'alert', recommended: false },
 ];
+
+type DelayKey = `${AiringDelayHours}`;
+
+/** Délais du segmenté (valeurs texte : le contrôle segmenté travaille sur des chaînes) */
+const DELAY_OPTIONS = AIRING_DELAYS.map((hours) => ({ value: `${hours}` as DelayKey, label: `${hours} h`, aria: `${hours} heure${hours > 1 ? 's' : ''} après la diffusion` }));
+
+function delayFromKey(key: DelayKey): AiringDelayHours {
+  return AIRING_DELAYS.find((hours) => `${hours}` === key) ?? AIRING_DELAYS[0];
+}
 
 /** Miniature d'écran illustrant chaque niveau de notification */
 function notifGlyph(glyph: NotifGlyph): SVGSVGElement {
@@ -232,6 +246,66 @@ export function createSettingsScreen(): SettingsScreen {
   let exclusions: ExclusionsState = { status: 'loading' };
   let reactivatingId: string | null = null;
   let exclusionsError: string | null = null;
+
+  // Ligne d'état des alertes : emplacement persistant, redessiné seul (tic d'horloge, stockage) sans refaire le formulaire
+  const airingSlot = h('div', { class: `flex items-center justify-between gap-2 pt-2 ${DIVIDER}` });
+  let airingResult: AiringCheckResult | null = null;
+  let airingNow = Date.now();
+  let airingPending = false;
+
+  function drawAiring(): void {
+    preserveFocus(airingSlot, () => airingSlot.replaceChildren(...nodes(renderAiring())));
+  }
+
+  function renderAiring(): Child[] {
+    const enabled = settings?.airingAlerts ?? false;
+    const line = formatAiringStatus(airingResult, airingNow);
+    return [
+      h(
+        'span',
+        { class: `min-w-0 text-[11px] font-semibold ${line.tone === 'danger' ? 'text-danger' : 'text-muted'}`, attrs: { role: 'status', 'aria-live': 'polite' } },
+        airingPending ? 'Vérification en cours…' : line.text,
+      ),
+      h(
+        'button',
+        {
+          class: `${BTN_GHOST} text-sakura`,
+          attrs: {
+            type: 'button',
+            'data-focus': 'airing-check',
+            title: enabled ? 'Interroger le calendrier AniList maintenant' : 'Active les alertes pour vérifier',
+            ...(!enabled || airingPending ? { disabled: '' } : {}),
+          },
+          on: { click: () => void checkAiringNow() },
+        },
+        airingPending && icon('spinner', 'h-3 w-3 motion-safe:animate-spin'),
+        'Vérifier maintenant',
+      ),
+    ];
+  }
+
+  /** Ligne réinsérée à chaque rendu du formulaire (l'état « alertes actives » du bouton en dépend) */
+  function airingRow(): HTMLElement {
+    drawAiring();
+    return airingSlot;
+  }
+
+  async function checkAiringNow(): Promise<void> {
+    if (airingPending) return;
+    airingPending = true;
+    drawAiring();
+    try {
+      const result = await sendMessage('CHECK_AIRING', null);
+      // Réponse de secours du service worker : horodatage absent
+      airingResult = { ...result, checkedAt: result.checkedAt || Date.now() };
+    } catch (error: unknown) {
+      console.error('[SyncKai] Vérification des sorties impossible :', error);
+      airingResult = { checkedAt: Date.now(), notified: 0, skipped: null, error: 'service indisponible, réessaie' };
+    }
+    airingNow = Date.now();
+    airingPending = false;
+    drawAiring();
+  }
 
   function showStatus(ok: boolean): void {
     clearTimeout(badgeTimer);
@@ -396,7 +470,54 @@ export function createSettingsScreen(): SettingsScreen {
           'div',
           { class: `${CARD} flex flex-col gap-2 p-2` },
           h('div', { class: 'flex flex-col gap-1', attrs: { role: 'radiogroup', 'aria-labelledby': 'sk-notif-title' } }, ...notifCards),
-          h('span', { class: 'px-1 pb-1 text-[11px] font-semibold text-muted' }, 'Les alertes s’affichent toujours, quel que soit ce réglage.'),
+          h('span', { class: 'px-1 text-[11px] font-semibold text-muted' }, 'Les alertes s’affichent toujours, quel que soit ce réglage.'),
+          h(
+            'div',
+            { class: `flex flex-col px-1 pt-2 pb-1 ${DIVIDER}` },
+            h(
+              'div',
+              { class: 'flex items-center justify-between gap-3' },
+              h('label', { class: 'cursor-pointer text-[13px] font-bold', attrs: { for: 'sk-rating' } }, 'Proposer de noter en fin de série'),
+              renderSwitch('sk-rating', s.ratingPrompt, 'sk-rating-help', (checked) => void update({ ratingPrompt: checked })),
+            ),
+            h('span', { class: 'text-[11px] font-semibold text-muted', attrs: { id: 'sk-rating-help' } }, 'Une bulle « Ta note ? » quand une série passe en Terminé'),
+          ),
+        ),
+      ),
+      h(
+        'section',
+        { class: 'flex flex-col gap-2' },
+        sectionLabel('Nouveaux épisodes'),
+        h(
+          'div',
+          { class: `${CARD} flex flex-col gap-2 px-3 pt-2 pb-3` },
+          h(
+            'div',
+            { class: 'flex items-center justify-between gap-3' },
+            h('label', { class: 'cursor-pointer text-[13px] font-bold', attrs: { for: 'sk-airing' } }, 'Me notifier à la sortie d’un épisode'),
+            renderSwitch('sk-airing', s.airingAlerts, 'sk-airing-help', (checked) => void update({ airingAlerts: checked }, true)),
+          ),
+          h(
+            'div',
+            { class: `flex items-center justify-between gap-2 pt-2 ${DIVIDER}` },
+            h('span', { class: `text-[12px] font-bold ${s.airingAlerts ? '' : 'text-muted'}`, attrs: { id: 'sk-delay-label' } }, 'Délai'),
+            segmented({
+              options: DELAY_OPTIONS,
+              current: `${s.airingDelayHours}`,
+              onPick: (value) => void update({ airingDelayHours: delayFromKey(value) }, true),
+              attrs: { 'aria-labelledby': 'sk-delay-label', 'aria-describedby': 'sk-airing-help' },
+              focusKey: 'delay',
+              activeClass: 'bg-sakura',
+              trackClass: 'bg-ground',
+              disabled: !s.airingAlerts,
+            }),
+          ),
+          h(
+            'span',
+            { class: 'text-[11px] font-semibold text-muted', attrs: { id: 'sk-airing-help' } },
+            'Heure de diffusion au Japon ; Crunchyroll et ADN publient souvent un peu plus tard.',
+          ),
+          airingRow(),
         ),
       ),
     ];
@@ -701,6 +822,11 @@ export function createSettingsScreen(): SettingsScreen {
       drawForm();
     },
     refreshMappings,
+    updateAiring(result, now) {
+      airingResult = result;
+      airingNow = now;
+      drawAiring();
+    },
     updateExclusions(state) {
       exclusions = state;
       drawExclusions();

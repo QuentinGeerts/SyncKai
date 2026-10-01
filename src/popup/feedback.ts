@@ -52,3 +52,20 @@ export function retryFeedback(outcome: SyncOutcome): InlineFeedback {
 export function errorFeedback(text: string): InlineFeedback {
   return { tone: 'error', text, detail: text };
 }
+
+/**
+ * Résultat d'une note depuis « À noter » : `ok` = la note est écrite partout (la carte part),
+ * sinon `text` décrit l'échec affiché sous la carte.
+ */
+export function ratingFeedback(outcome: SyncOutcome, stars: string, title: string): InlineFeedback & { ok: boolean } {
+  const detail = detailOf(outcome);
+  if (outcome.status === 'synced') {
+    const failed = outcome.results.filter((r) => r.outcome.status === 'error').map((r) => TRACKER_LABELS[r.service]);
+    const written = outcome.results.some((r) => r.outcome.status === 'updated' || r.outcome.status === 'up-to-date');
+    if (failed.length === 0 && written) return { ok: true, tone: 'success', text: `Note ${stars}/10 enregistrée · ${title}`, detail };
+    if (failed.length > 0) return { ok: false, tone: 'error', text: `Échec sur ${failed.join(', ')}, réessaie`, detail };
+    return { ok: false, tone: 'warning', text: 'Rien n’a été enregistré', detail };
+  }
+  if (outcome.status === 'error') return { ok: false, tone: 'error', text: outcome.message, detail };
+  return { ok: false, tone: 'warning', text: describeOutcome(outcome).title, detail };
+}

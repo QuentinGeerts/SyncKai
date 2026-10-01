@@ -3,6 +3,21 @@
 Toutes les évolutions notables de SyncKai sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.6.0] - 2026-10-01
+
+Note, revisionnage et alertes de nouveaux épisodes.
+
+### Ajouté
+
+- **Note en fin de série** : quand une série passe en Terminé, une bulle propose une note sur 10 (10 étoiles, demi-points). Convertie selon le format de note AniList du profil (sur 100, sur 10 décimal, sur 10, sur 5, smileys) ; arrondie à l’entier inférieur pour MyAnimeList. « Plus tard » crée une carte dans Activité › À noter.
+- **Revisionnage** : un épisode vu sur une série déjà terminée propose un revisionnage (AniList REPEATING, MAL `is_rewatching`) ; les épisodes suivants avancent et le compteur de revisionnages augmente à la fin. « Non » : plus de question pendant 30 jours. Pas de proposition pour le seul dernier épisode.
+- **Alertes de nouveaux épisodes** : vérification horaire (une requête AniList groupée) et notification Chrome avec « Ouvrir » sur le lecteur préféré ; délai réglable (0, 1, 3, 6 h) ; état de la dernière vérification et bouton « Vérifier maintenant » dans Réglages.
+
+### Modifié
+
+- +1 / −1 conserve un revisionnage en cours.
+- Le badge de l’icône compte aussi les séries à noter.
+
 ## [1.5.0] - 2026-10-01
 
 Fiabilité et contrôle manuel.

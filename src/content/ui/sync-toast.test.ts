@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SyncOutcome } from '../../shared/sync.types';
-import { ALERT_TOAST_MS, PILL_TOAST_MS, SUCCESS_TOAST_MS, pillForOutcome, toastForOutcome } from './sync-toast';
+import { ALERT_TOAST_MS, PILL_TOAST_MS, SUCCESS_TOAST_MS, engagementResultToast, pillForOutcome, toastForOutcome } from './sync-toast';
 
 const synced: SyncOutcome = {
   status: 'synced',
@@ -68,6 +68,47 @@ describe('toastForOutcome — série exclue', () => {
       content: { tone: 'info', title: 'One Piece', message: 'Série exclue de la synchronisation.' },
       variant: 'bubble',
       autoHideMs: SUCCESS_TOAST_MS,
+    });
+  });
+});
+
+describe('engagementResultToast', () => {
+  const copy = { success: 'Note 8/10 enregistrée', failure: 'Note non enregistrée', mediaTitle: 'Frieren' };
+
+  it('tous les services écrits : pastille de succès', () => {
+    const outcome: SyncOutcome = { status: 'synced', mediaTitle: 'Frieren', results: [{ service: 'anilist', outcome: { status: 'updated', progress: 28, completed: true } }] };
+    expect(engagementResultToast(outcome, copy)).toEqual({
+      ok: true,
+      content: { tone: 'success', title: 'Note 8/10 enregistrée', message: 'Frieren' },
+      variant: 'pill',
+      autoHideMs: PILL_TOAST_MS,
+    });
+  });
+
+  it('échec partiel : bulle avec le détail par service', () => {
+    const outcome: SyncOutcome = {
+      status: 'synced',
+      mediaTitle: 'Frieren',
+      results: [
+        { service: 'anilist', outcome: { status: 'up-to-date', progress: 28 } },
+        { service: 'mal', outcome: { status: 'error', message: 'Réseau' } },
+      ],
+    };
+    const result = engagementResultToast(outcome, copy);
+    expect(result.ok).toBe(false);
+    expect(result.variant).toBe('bubble');
+    expect(result.content.tone).toBe('warning');
+    expect(result.content.lines).toEqual([
+      { label: 'AniList', text: 'enregistré', tone: 'ok' },
+      { label: 'MyAnimeList', text: 'échec : Réseau', tone: 'error' },
+    ]);
+  });
+
+  it('erreur globale : bulle d’erreur avec le message', () => {
+    expect(engagementResultToast({ status: 'error', message: 'AniList indisponible' }, copy).content).toEqual({
+      tone: 'error',
+      title: 'Note non enregistrée',
+      message: 'AniList indisponible',
     });
   });
 });

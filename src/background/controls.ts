@@ -3,7 +3,7 @@ import type { AdjustProgressPayload } from '../shared/messages';
 import type { ServiceOutcome, ServiceResult, SyncOutcome } from '../shared/sync.types';
 import { TRACKER_LABELS } from '../shared/tracker.types';
 import { ApiError } from './api/errors';
-import type { ListEntryState } from './sync/rules';
+import type { ListEntryState, WriteStatus } from './sync/rules';
 import { getCatalogMedia } from './sync/sync-service';
 import { getConnectedTrackers } from './trackers';
 import type { CatalogMedia, TrackerService } from './trackers/tracker';
@@ -16,7 +16,7 @@ const LOG_PREFIX = '[SyncKai:controls]';
 export const COMPLETE_EPISODE_COMMAND = 'complete-episode';
 
 export type AdjustDecision =
-  | { action: 'write'; progress: number; status: 'CURRENT' | 'COMPLETED' }
+  | { action: 'write'; progress: number; status: WriteStatus }
   | { action: 'skip'; reason: string };
 
 /**
@@ -28,8 +28,9 @@ export function decideAdjustment(entry: ListEntryState | null, total: number | n
   if (delta === -1 && current <= 0) return { action: 'skip', reason: 'Aucun épisode à retirer' };
   if (delta === 1 && total !== null && current >= total) return { action: 'skip', reason: 'Déjà au dernier épisode' };
   const progress = Math.max(0, current + delta);
-  // −1 sur une entrée terminée la repasse « en cours »
-  return { action: 'write', progress, status: total !== null && progress >= total ? 'COMPLETED' : 'CURRENT' };
+  if (total !== null && progress >= total) return { action: 'write', progress, status: 'COMPLETED' };
+  // Revisionnage en cours : il continue ; −1 sur une entrée terminée la repasse « en cours »
+  return { action: 'write', progress, status: entry?.status === 'REPEATING' ? 'REPEATING' : 'CURRENT' };
 }
 
 /** Ajuste UN service. Ne lève jamais : l'échec est un résultat. */

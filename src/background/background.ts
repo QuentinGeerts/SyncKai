@@ -3,10 +3,14 @@ import { getViewer } from './api/viewer';
 import { getWatchingList } from './api/watching';
 import { loginWithAniList } from './auth/anilist';
 import { loginWithMal } from './auth/mal';
+import { AIRING_ALARM, checkNewEpisodes, ensureAiringAlarm, handleNotificationButton, handleNotificationClick } from './airing';
 import { adjustProgress, handleCommand } from './controls';
+import { declineRewatch, deferRating, rateMedia, startRewatch } from './engagement';
 import { ensureQueueAlarm, processSyncQueue, QUEUE_ALARM, recordSyncOutcome, retryQueued } from './sync/queue';
 import { reopenReview, resolveReview, searchCandidates, syncEpisode } from './sync/sync-service';
 import { refreshReviewBadge } from '../shared/badge';
+import { SETTINGS_STORAGE_KEY } from '../shared/settings';
+import { STORAGE_KEYS } from '../shared/storage';
 import {
   EXTENSION_PAGE_ONLY,
   isRuntimeMessage,
@@ -40,6 +44,11 @@ const UNEXPECTED_ERRORS: { [K in MessageType]: MessageResponse<K> } = {
   RESOLVE_REVIEW: { status: 'error', message: 'Erreur inattendue pendant la synchronisation.' },
   REOPEN_REVIEW: { ok: false, code: 'API_ERROR', message: 'Erreur inattendue.' },
   GET_WATCHING: { ok: false, code: 'API_ERROR', message: 'Erreur inattendue.' },
+  RATE_MEDIA: { status: 'error', message: 'Erreur inattendue pendant l’enregistrement de la note.' },
+  DEFER_RATING: { ok: false, code: 'API_ERROR', message: 'Erreur inattendue.' },
+  START_REWATCH: { status: 'error', message: 'Erreur inattendue pendant le démarrage du revisionnage.' },
+  DECLINE_REWATCH: { ok: false, code: 'API_ERROR', message: 'Erreur inattendue.' },
+  CHECK_AIRING: { checkedAt: 0, notified: 0, skipped: null, error: 'Erreur inattendue.' },
 };
 
 type MessageHandlers = {
@@ -68,6 +77,15 @@ const handlers: MessageHandlers = {
   RESOLVE_REVIEW: (payload) => resolveReview(payload),
   REOPEN_REVIEW: ({ key }) => reopenReview(key),
   GET_WATCHING: ({ service }) => getWatchingList(service),
+  RATE_MEDIA: ({ media, score }) => rateMedia(media, score),
+  DEFER_RATING: ({ media, coverUrl }) => deferRating(media, coverUrl),
+  START_REWATCH: ({ media, progress }) => startRewatch(media, progress),
+  DECLINE_REWATCH: ({ media }) => declineRewatch(media),
+  // Vérification manuelle : (re)crée aussi l'alarme horaire si elle a disparu
+  CHECK_AIRING: async () => {
+    await ensureAiringAlarm();
+    return checkNewEpisodes();
+  },
 };
 
 // Générique pour conserver la corrélation type ↔ payload ↔ handler
@@ -118,4 +136,28 @@ chrome.runtime.onStartup.addListener((): void => {
 });
 chrome.runtime.onInstalled.addListener((): void => {
   void ensureQueueAlarm();
+});
+
+// ─── Alertes de nouveaux épisodes ──────────────────────────────────────────
+
+chrome.alarms.onAlarm.addListener((alarm): void => {
+  if (alarm.name === AIRING_ALARM) void checkNewEpisodes();
+});
+chrome.notifications.onClicked.addListener((id): void => {
+  void handleNotificationClick(id);
+});
+chrome.notifications.onButtonClicked.addListener((id, index): void => {
+  void handleNotificationButton(id, index);
+});
+chrome.runtime.onStartup.addListener((): void => {
+  void ensureAiringAlarm();
+});
+chrome.runtime.onInstalled.addListener((): void => {
+  void ensureAiringAlarm();
+});
+// Réglage modifié ou compte (dé)connecté : l'alarme suit
+chrome.storage.onChanged.addListener((changes, area): void => {
+  if (area === 'local' && (SETTINGS_STORAGE_KEY in changes || STORAGE_KEYS.anilistToken in changes || STORAGE_KEYS.malToken in changes)) {
+    void ensureAiringAlarm();
+  }
 });

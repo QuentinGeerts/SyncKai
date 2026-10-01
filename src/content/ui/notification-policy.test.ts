@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { FeedbackTone } from '../../shared/sync-feedback';
 import type { NotificationLevel } from '../../shared/settings';
-import { decideExcludedNotification, decideNotification, isAlertTone, showsProgress } from './notification-policy';
+import type { SyncOutcome } from '../../shared/sync.types';
+import { decideExcludedNotification, decideNotification, isAlertTone, promptForOutcome, showsProgress } from './notification-policy';
 
 const LEVELS: NotificationLevel[] = ['discreet', 'detailed', 'alerts-only'];
 const ALERTS: FeedbackTone[] = ['warning', 'error'];
@@ -54,5 +55,23 @@ describe('decideExcludedNotification', () => {
     expect(decideExcludedNotification('detailed')).toBe('bubble');
     expect(decideExcludedNotification('discreet')).toBe('none');
     expect(decideExcludedNotification('alerts-only')).toBe('none');
+  });
+});
+
+describe('promptForOutcome', () => {
+  const media = { mediaId: 1, malId: 2, title: 'Frieren' };
+  const synced: Extract<SyncOutcome, { status: 'synced' }> = { status: 'synced', mediaTitle: 'Frieren', results: [] };
+
+  it('rien sans demande ni pour un autre statut', () => {
+    expect(promptForOutcome(synced)).toBeNull();
+    expect(promptForOutcome({ status: 'error', message: 'x' })).toBeNull();
+  });
+
+  it('la note passe avant le revisionnage', () => {
+    expect(promptForOutcome({ ...synced, prompts: { rate: media, rewatch: { ...media, progress: 3 } } })).toEqual({ kind: 'rate', media });
+  });
+
+  it('revisionnage : progression séparée de la fiche', () => {
+    expect(promptForOutcome({ ...synced, prompts: { rewatch: { ...media, progress: 3 } } })).toEqual({ kind: 'rewatch', media, progress: 3 });
   });
 });

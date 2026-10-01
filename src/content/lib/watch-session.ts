@@ -5,7 +5,8 @@ import { failedServices } from '../../shared/sync.types';
 import type { TrackerId } from '../../shared/tracker.types';
 import { DEFAULT_SETTINGS, getSettings, type NotificationLevel, type SyncSettings } from '../../shared/settings';
 import type { StreamingAdapter } from '../adapters/adapter';
-import { isAlertTone, showsProgress } from '../ui/notification-policy';
+import { showEngagementPrompt } from '../ui/engagement-prompt';
+import { isAlertTone, promptForOutcome, showsProgress } from '../ui/notification-policy';
 import { ALERT_TOAST_MS, RETRY_TOAST_MS, bubbleForOutcome, toastForOutcome } from '../ui/sync-toast';
 import { showToast, type ToastContent, type ToastOptions } from '../ui/toast';
 import { createLogger } from './logger';
@@ -154,6 +155,12 @@ export function startWatchSession(adapter: StreamingAdapter, episodeId: string):
         // Nouvelle tentative explicite : mode détaillé forcé pour voir la progression et le résultat
         const action = { label: 'Réessayer', onClick: () => void syncWithFeedback(episode, 'detailed', retry) };
         notify({ ...bubbleForOutcome(outcome), action }, { variant: 'bubble', autoHideMs: RETRY_TOAST_MS });
+        return;
+      }
+      // Note de fin de série / revisionnage : bulle à tous les niveaux (même en plein écran), à la place du résultat
+      const prompt = promptForOutcome(outcome);
+      if (prompt) {
+        showEngagementPrompt(prompt);
         return;
       }
       const result = toastForOutcome(outcome, level, document.fullscreenElement !== null);

@@ -25,9 +25,30 @@ describe('decideListUpdate', () => {
     expect(decideListUpdate({ status: 'CURRENT', progress: 10 }, 4, 12)).toEqual({ action: 'skip', reason: 'up-to-date' });
   });
 
-  it('ne touche ni à un anime terminé ni à un revisionnage', () => {
+  it('ne touche pas à un anime terminé', () => {
     expect(decideListUpdate({ status: 'COMPLETED', progress: 12 }, 3, 12)).toEqual({ action: 'skip', reason: 'already-completed' });
-    expect(decideListUpdate({ status: 'REPEATING', progress: 2 }, 3, 12)).toEqual({ action: 'skip', reason: 'repeating' });
+  });
+});
+
+describe('decideListUpdate — revisionnage (REPEATING)', () => {
+  it('fait avancer la progression en restant REPEATING', () => {
+    expect(decideListUpdate({ status: 'REPEATING', progress: 2 }, 3, 12)).toEqual({ action: 'update', progress: 3, status: 'REPEATING' });
+    expect(decideListUpdate({ status: 'REPEATING', progress: 2, repeat: 1 }, 3, null)).toEqual({ action: 'update', progress: 3, status: 'REPEATING' });
+  });
+
+  it('termine le revisionnage au dernier épisode et incrémente le compteur', () => {
+    expect(decideListUpdate({ status: 'REPEATING', progress: 11, repeat: 1 }, 12, 12)).toEqual({
+      action: 'update',
+      progress: 12,
+      status: 'COMPLETED',
+      repeat: 2,
+    });
+    expect(decideListUpdate({ status: 'REPEATING', progress: 11 }, 12, 12)).toEqual({ action: 'update', progress: 12, status: 'COMPLETED', repeat: 1 });
+  });
+
+  it('ne fait jamais reculer un revisionnage', () => {
+    expect(decideListUpdate({ status: 'REPEATING', progress: 5 }, 5, 12)).toEqual({ action: 'skip', reason: 'up-to-date' });
+    expect(decideListUpdate({ status: 'REPEATING', progress: 5 }, 2, 12)).toEqual({ action: 'skip', reason: 'up-to-date' });
   });
 });
 

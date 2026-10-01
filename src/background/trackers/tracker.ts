@@ -1,5 +1,6 @@
 import type { TrackerId } from '../../shared/tracker.types';
-import type { ListEntryState } from '../sync/rules';
+import type { Score10 } from '../../shared/engagement.types';
+import type { ListEntryState, WriteStatus } from '../sync/rules';
 
 /**
  * Fiche du catalogue (AniList) choisie par la correspondance.
@@ -29,5 +30,10 @@ export interface TrackerService {
   /** Identifiant de la fiche sur ce service, null s'il n'a pas d'équivalent */
   resolveId(media: CatalogMedia): number | null;
   getEntry(id: number): Promise<TrackerEntry>;
-  saveProgress(id: number, progress: number, status: 'CURRENT' | 'COMPLETED'): Promise<ListEntryState>;
+  /** `repeat` : nouveau nombre de revisionnages à écrire (fin d'un revisionnage, statut COMPLETED) */
+  saveProgress(id: number, progress: number, status: WriteStatus, repeat?: number): Promise<ListEntryState>;
+  /** Note SyncKai (sur 10), convertie dans le format du service */
+  saveScore(id: number, score: Score10): Promise<ListEntryState>;
+  /** Démarre un revisionnage (REPEATING) à la progression donnée */
+  startRewatch(id: number, progress: number): Promise<ListEntryState>;
 }

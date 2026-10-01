@@ -14,7 +14,8 @@
   "permissions": [
     "storage",
     "identity",
-    "alarms"
+    "alarms",
+    "notifications"
   ],
   "host_permissions": [
     "*://*.crunchyroll.com/*",

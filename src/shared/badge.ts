@@ -1,3 +1,4 @@
+import { getPendingRatings } from './engagement-store';
 import { getPendingReviews } from './storage';
 import { getSyncQueue } from './sync-queue-store';
 
@@ -18,12 +19,12 @@ async function setBadgeColors(background: string, text: string): Promise<void> {
   }
 }
 
-/** Affiche sur l'icône le nombre d'épisodes à vérifier + synchros abandonnées (vide si aucun). */
+/** Affiche sur l'icône le nombre d'épisodes à vérifier + synchros abandonnées + séries à noter (vide si aucun). */
 export async function refreshReviewBadge(): Promise<void> {
   // Coche de succès en cours : le compteur sera restauré à la fin du flash
   if (flashTimer !== undefined) return;
-  const [reviews, queue] = await Promise.all([getPendingReviews(), getSyncQueue()]);
-  const count = reviews.length + queue.filter((item) => item.status === 'failed').length;
+  const [reviews, queue, ratings] = await Promise.all([getPendingReviews(), getSyncQueue(), getPendingRatings()]);
+  const count = reviews.length + queue.filter((item) => item.status === 'failed').length + ratings.length;
   await chrome.action.setBadgeText({ text: count > 0 ? String(count) : '' });
   if (count > 0) await setBadgeColors(BADGE_COLOR, BADGE_TEXT_COLOR);
 }

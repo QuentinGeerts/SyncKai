@@ -1,6 +1,8 @@
+import { AIRING_RESULT_KEY, isAiringCheckResult, type AiringCheckResult } from '../shared/airing.types';
 import { isAniListViewer, type ViewerErrorCode, type ViewerResult } from '../shared/anilist.types';
 import { isAniListToken, type AuthResult } from '../shared/auth.types';
 import { refreshReviewBadge } from '../shared/badge';
+import type { PendingRating } from '../shared/engagement.types';
 import type { EpisodeInfo } from '../shared/episode.types';
 import { EXCLUDED_SERIES_KEY, excludeSeries, getExcludedSeries, includeSeries, platformSeriesKey } from '../shared/exclusions';
 import { isMalViewer, type MalViewerResult } from '../shared/mal.types';
@@ -27,16 +29,19 @@ import { isTrackerId, TRACKER_IDS, TRACKER_LABELS, type TrackerId } from '../sha
 import { formatRelativeTime } from '../shared/watching';
 import { DEFAULT_WATCHING_SORT, isWatchingSort, type WatchingEntry, type WatchingResult, type WatchingSort } from '../shared/watching.types';
 import { h, nodes, preserveFocus } from '../ui/dom';
+import { formatStarValue } from '../ui/rating';
 import { renderFooter, type FooterStatus } from './components/footer';
 import { renderHeader, renderNav, renderSettingsBar } from './components/header';
 import { renderOnboarding } from './components/onboarding';
 import { renderQueueSection } from './components/queue-section';
+import { renderRatingSection } from './components/rating-section';
 import { renderRecentSyncs } from './components/recent-syncs';
 import type { ReviewActions } from './components/review-card';
 import { createReviewSection } from './components/review-section';
 import { createSettingsScreen } from './components/settings-screen';
 import { entryKey, renderWatchingScreen } from './components/watching-screen';
-import { adjustFeedback, errorFeedback, retryFeedback } from './feedback';
+import { adjustFeedback, errorFeedback, ratingFeedback, retryFeedback } from './feedback';
+import { getPendingRatings, PENDING_RATINGS_KEY, removePendingRating } from './pending-ratings';
 import {
   createStore,
   LOGGED_OUT,
@@ -46,6 +51,7 @@ import {
   type ExclusionsState,
   type InlineFeedback,
   type QueueState,
+  type RatingsState,
   type MalState,
   type Screen,
   type SettingsState,
@@ -84,6 +90,7 @@ const settingsStore = createStore<SettingsState>({ status: 'loading' });
 const entryActionsStore = createStore<ReadonlyMap<string, EntryAction>>(new Map());
 const exclusionsStore = createStore<ExclusionsState>({ status: 'loading' });
 const queueStore = createStore<QueueState>({ items: [], busyIds: new Set(), notice: null, error: null });
+const ratingsStore = createStore<RatingsState>({ items: [], busyIds: new Set(), errors: new Map(), notice: null, error: null });
 const version = chrome.runtime.getManifest().version;
 let now = Date.now();
 
@@ -137,8 +144,9 @@ const watchingSlot = h('div', { class: 'min-h-full' });
 const onboardingSlot = h('div', { class: 'min-h-full' });
 const reviewSection = createReviewSection(reviewActions);
 const queueSlot = h('div', { class: 'contents' });
+const ratingSlot = h('div', { class: 'contents' });
 const recentSlot = h('div', { class: 'contents' });
-const activityScreen = h('div', { class: 'flex flex-col gap-4 pb-1' }, queueSlot, reviewSection.element, recentSlot);
+const activityScreen = h('div', { class: 'flex flex-col gap-4 pb-1' }, queueSlot, ratingSlot, reviewSection.element, recentSlot);
 const settingsScreen = createSettingsScreen();
 const footerSlot = h('div', { class: 'contents' });
 const main = h(
@@ -293,6 +301,9 @@ function footerStatus(): FooterStatus {
   if (connected.length > 0 && pending > 0) return { kind: 'queue-pending', count: pending };
   if (expired) return { kind: 'expired', service: expired };
   if (connected.length === 0) return { kind: 'none' };
+  // Priorité la plus basse : une note reportée n'empêche rien de fonctionner
+  const toRate = ratingsStore.get().items.length;
+  if (toRate > 0) return { kind: 'to-rate', count: toRate };
   const latest = recentSyncs[0];
   return { kind: 'ok', relative: latest ? formatRelativeTime(latest.syncedAt, now) : null };
 }
@@ -365,13 +376,34 @@ function renderWatching(): void {
   if (rowMenu !== null && !watchingSlot.querySelector(`[data-menu-root="${rowMenu}"]`)) queueMicrotask(() => setRowMenu(null, false));
 }
 
+/** Section « À noter » redessinée seulement si son état change (préserve le survol des étoiles) */
+let ratingsMemo: readonly unknown[] = [];
+
+function renderRatings(): void {
+  const connected = connectedServices().length > 0;
+  const inputs = [ratingsStore.get(), connected, now];
+  if (inputs.every((value, i) => value === ratingsMemo[i])) return;
+  ratingsMemo = inputs;
+  ratingSlot.replaceChildren(
+    ...nodes([
+      connected &&
+        renderRatingSection({
+          ratings: ratingsStore.get(),
+          now,
+          onRate: (item, value) => void rateMedia(item, value),
+          onIgnore: (item) => void ignoreRating(item),
+        }),
+    ]),
+  );
+}
+
 function render(): void {
   const ui = uiStore.get();
   const onboarding = isOnboarding();
   const isSettings = ui.screen === 'settings';
   const data = syncStore.get();
-  // Pastille « Activité » : vérifications + synchros abandonnées (à traiter par l'utilisateur)
-  const pending = connectedServices().length > 0 ? data.reviews.length + queueCounts().failed : 0;
+  // Pastille « Activité » : vérifications + synchros abandonnées + séries à noter (à traiter par l'utilisateur)
+  const pending = connectedServices().length > 0 ? data.reviews.length + queueCounts().failed + ratingsStore.get().items.length : 0;
 
   preserveFocus(root, () => {
     headerSlot.replaceChildren(renderHeader({ isSettings, onSettings: toggleSettings }));
@@ -406,6 +438,7 @@ function render(): void {
           }),
       ]),
     );
+    renderRatings();
     reviewSection.update(connectedServices().length > 0 ? data.reviews : []);
     recentSlot.replaceChildren(
       renderRecentSyncs({
@@ -788,6 +821,73 @@ async function loadQueue(): Promise<void> {
   }
 }
 
+// ─── Notes reportées (Activité › À noter) ──────────────────────────────────
+
+let ratingNoticeTimer: ReturnType<typeof setTimeout> | undefined;
+
+function patchRatings(patch: Partial<RatingsState>): void {
+  ratingsStore.set({ ...ratingsStore.get(), ...patch });
+}
+
+function withBusy(id: string, busy: boolean): ReadonlySet<string> {
+  const next = new Set(ratingsStore.get().busyIds);
+  if (busy) next.add(id);
+  else next.delete(id);
+  return next;
+}
+
+function withError(id: string, error: string | null): ReadonlyMap<string, string> {
+  const next = new Map(ratingsStore.get().errors);
+  if (error) next.set(id, error);
+  else next.delete(id);
+  return next;
+}
+
+async function rateMedia(item: PendingRating, value: number): Promise<void> {
+  if (ratingsStore.get().busyIds.has(item.id)) return;
+  patchRatings({ busyIds: withBusy(item.id, true), errors: withError(item.id, null) });
+  let outcome: SyncOutcome;
+  try {
+    outcome = await sendMessage('RATE_MEDIA', { media: { mediaId: item.mediaId, malId: item.malId, title: item.title }, score: value });
+  } catch (error: unknown) {
+    console.error('[SyncKai] Service worker injoignable :', error);
+    outcome = { status: 'error', message: SW_UNREACHABLE };
+  }
+  const feedback = ratingFeedback(outcome, formatStarValue(value), item.title);
+  if (!feedback.ok) {
+    patchRatings({ busyIds: withBusy(item.id, false), errors: withError(item.id, feedback.text) });
+    return;
+  }
+  // Le service worker retire la carte du stockage ; elle disparaît tout de suite de l'affichage
+  clearTimeout(ratingNoticeTimer);
+  const current = ratingsStore.get();
+  patchRatings({ items: current.items.filter((i) => i.id !== item.id), busyIds: withBusy(item.id, false), notice: feedback });
+  ratingNoticeTimer = setTimeout(() => patchRatings({ notice: null }), QUEUE_NOTICE_MS);
+}
+
+async function ignoreRating(item: PendingRating): Promise<void> {
+  try {
+    await removePendingRating(item.id);
+    patchRatings({ error: null });
+  } catch (error: unknown) {
+    console.error('[SyncKai] Suppression de la note en attente impossible :', error);
+    patchRatings({ error: 'La série n’a pas pu être ignorée. Réessaie.' });
+  }
+}
+
+async function loadRatings(): Promise<void> {
+  try {
+    const items = await getPendingRatings();
+    const current = ratingsStore.get();
+    // Cartes en cours d'envoi conservées : le service worker les retire seulement après l'écriture
+    const busy = current.items.filter((i) => current.busyIds.has(i.id) && !items.some((n) => n.id === i.id));
+    patchRatings({ items: [...busy, ...items], error: null });
+  } catch (error: unknown) {
+    console.error('[SyncKai] Lecture des notes en attente impossible :', error);
+    patchRatings({ error: 'Impossible de lire les séries à noter.' });
+  }
+}
+
 // ─── Données de synchro ───────────────────────────────────────────────────
 
 /** "Corriger" : le service worker recharge les fiches candidates et rouvre une carte. */
@@ -851,8 +951,7 @@ chrome.storage.onChanged.addListener((changes, areaName): void => {
   }
 
   if (changes[STORAGE_KEYS.pendingReviews] || changes[STORAGE_KEYS.recentSyncs]) void loadSyncData();
-void loadExclusions();
-void loadQueue();
+  if (changes[PENDING_RATINGS_KEY]) void loadRatings();
 
   const settingsChange = changes[SETTINGS_STORAGE_KEY];
   if (settingsChange) settingsStore.set({ status: 'ready', settings: normalizeSettings(settingsChange.newValue) });
@@ -860,10 +959,30 @@ void loadQueue();
   if (changes[STORAGE_KEYS.mediaMappings]) void settingsScreen.refreshMappings();
   if (changes[EXCLUDED_SERIES_KEY]) void loadExclusions();
   if (changes[SYNC_QUEUE_KEY]) void loadQueue();
+  const airingChange = changes[AIRING_RESULT_KEY];
+  if (airingChange) setAiringResult(airingChange.newValue);
 
   // Synchro dans un onglet : le service worker ne met pas le cache « En cours » à jour → revalidation
   if (changes[STORAGE_KEYS.recentSyncs]) scheduleWatchingRevalidation();
 });
+
+// ─── Alertes de sortie : dernier résumé de vérification ───────────────────
+
+let airingResult: AiringCheckResult | null = null;
+
+function setAiringResult(value: unknown): void {
+  airingResult = isAiringCheckResult(value) ? value : null;
+  settingsScreen.updateAiring(airingResult, Date.now());
+}
+
+async function loadAiringResult(): Promise<void> {
+  try {
+    const stored = await chrome.storage.local.get(AIRING_RESULT_KEY);
+    setAiringResult(stored[AIRING_RESULT_KEY]);
+  } catch (error: unknown) {
+    console.warn('[SyncKai] Lecture du résumé des alertes impossible :', error);
+  }
+}
 
 const REVALIDATE_DEBOUNCE_MS = 1_000;
 let revalidateTimer: ReturnType<typeof setTimeout> | undefined;
@@ -884,7 +1003,7 @@ anilistStore.subscribe(syncWatchingSource);
 malStore.subscribe(syncWatchingSource);
 uiStore.subscribe(syncWatchingSource);
 uiStore.subscribe(syncMenuListeners);
-for (const store of [anilistStore, malStore, syncStore, uiStore, watchingStore, entryActionsStore, queueStore]) store.subscribe(render);
+for (const store of [anilistStore, malStore, syncStore, uiStore, watchingStore, entryActionsStore, queueStore, ratingsStore]) store.subscribe(render);
 exclusionsStore.subscribe((state) => {
   settingsScreen.updateExclusions(state);
   render();
@@ -898,10 +1017,15 @@ settingsStore.subscribe((state) => {
 setInterval(() => {
   now = Date.now();
   render();
+  settingsScreen.updateAiring(airingResult, now);
 }, CLOCK_TICK_MS);
 
 void loadSettings();
 void loadSyncData();
+void loadExclusions();
+void loadQueue();
+void loadRatings();
+void loadAiringResult();
 void settingsScreen.refreshMappings();
 // La source préférée est lue avant les comptes : évite de charger la mauvaise liste puis de basculer
 void loadPrefs().then(() => Promise.all([bootstrap('anilist'), bootstrap('mal')]));

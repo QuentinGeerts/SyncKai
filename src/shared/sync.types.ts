@@ -1,4 +1,5 @@
 import type { AniListErrorCode } from './anilist.types';
+import type { SyncPrompts } from './engagement.types';
 import type { TrackerId } from './tracker.types';
 
 /** Code d'erreur d'API (absent pour une erreur métier, ex : vérification introuvable) : décide de la relance automatique */
@@ -51,7 +52,7 @@ export interface ServiceResult {
 export type SyncOutcome =
   /** Fiche identifiée : un résultat par service connecté (succès partiel possible) */
   /** `queued` : au moins un service en échec a été mis en file de relance automatique */
-  | { status: 'synced'; mediaTitle: string; results: ServiceResult[]; queued?: boolean }
+  | { status: 'synced'; mediaTitle: string; results: ServiceResult[]; queued?: boolean; prompts?: SyncPrompts }
   | { status: 'needs-review'; reason: string }
   | { status: 'not-connected' }
   /** Série exclue par l'utilisateur (Réglages › Séries exclues) : rien n'a été écrit */

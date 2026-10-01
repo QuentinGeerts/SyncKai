@@ -10,6 +10,8 @@ export type FooterStatus =
   | { kind: 'queue-failed'; count: number }
   | { kind: 'queue-pending'; count: number }
   | { kind: 'expired'; service: TrackerId }
+  /** Séries terminées dont la note a été reportée (Activité › À noter) */
+  | { kind: 'to-rate'; count: number }
   | { kind: 'ok'; relative: string | null };
 
 interface FooterProps {
@@ -64,6 +66,23 @@ function renderStatus({ status, onOpenActivity, onReconnect }: FooterProps): HTM
             on: { click: onOpenActivity },
           },
           icon(failed ? 'alert' : 'clock', 'h-3.5 w-3.5'),
+          h('span', { class: 'truncate' }, label),
+        ),
+      );
+    }
+    case 'to-rate': {
+      const label = `${status.count} série${status.count > 1 ? 's' : ''} à noter`;
+      return h(
+        'div',
+        { class: box, attrs: { role: 'status' } },
+        h(
+          'button',
+          {
+            class: 'flex h-8 min-w-0 cursor-pointer items-center gap-1 rounded-full px-2 text-sakura transition-colors hover:bg-raised',
+            attrs: { type: 'button', 'aria-label': `${label} — voir l’activité`, 'data-focus': 'footer-rate' },
+            on: { click: onOpenActivity },
+          },
+          icon('star', 'h-3.5 w-3.5'),
           h('span', { class: 'truncate' }, label),
         ),
       );

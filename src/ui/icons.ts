@@ -23,6 +23,7 @@ const ICON_PATHS = {
   minus: ['M5 12h14'],
   retry: ['M3 12a9 9 0 1 0 3-6.7L3 8', 'M3 3v5h5'],
   clock: ['M22 12a10 10 0 1 1-20 0a10 10 0 1 1 20 0', 'M12 7v5l3 2'],
+  star: ['M12 2.6l2.85 5.95 6.55.85-4.8 4.55 1.25 6.5L12 17.3l-5.85 3.15 1.25-6.5-4.8-4.55 6.55-.85z'],
 } as const;
 
 export type IconName = keyof typeof ICON_PATHS;

@@ -1,4 +1,5 @@
 import type { StreamingPlatform } from './episode.types';
+import { AIRING_DELAYS, type AiringDelayHours } from './engagement.types';
 import { isRecord } from './guards';
 
 export type CompletionTrigger = 'credits' | 'percentage';
@@ -22,6 +23,12 @@ export interface SyncSettings {
   notificationLevel: NotificationLevel;
   /** Plateforme ouverte par « Ouvrir » quand l'anime est disponible sur plusieurs plateformes */
   preferredPlayer: StreamingPlatform;
+  /** Proposer une note quand une série passe en Terminé */
+  ratingPrompt: boolean;
+  /** Notifications Chrome à la sortie d'un nouvel épisode d'une série en cours */
+  airingAlerts: boolean;
+  /** Délai après la diffusion japonaise avant de notifier */
+  airingDelayHours: AiringDelayHours;
 }
 
 export const DEFAULT_SETTINGS: SyncSettings = {
@@ -30,6 +37,9 @@ export const DEFAULT_SETTINGS: SyncSettings = {
   completionPercentage: 85,
   notificationLevel: 'discreet',
   preferredPlayer: 'crunchyroll',
+  ratingPrompt: true,
+  airingAlerts: true,
+  airingDelayHours: 0,
 };
 
 export const PERCENTAGE_RANGE = { min: 70, max: 98 } as const;
@@ -62,6 +72,9 @@ export function normalizeSettings(raw: unknown): SyncSettings {
     completionPercentage: percentage,
     notificationLevel,
     preferredPlayer: PLAYERS.find((p) => p === value.preferredPlayer) ?? DEFAULT_SETTINGS.preferredPlayer,
+    ratingPrompt: typeof value.ratingPrompt === 'boolean' ? value.ratingPrompt : DEFAULT_SETTINGS.ratingPrompt,
+    airingAlerts: typeof value.airingAlerts === 'boolean' ? value.airingAlerts : DEFAULT_SETTINGS.airingAlerts,
+    airingDelayHours: AIRING_DELAYS.find((d) => d === value.airingDelayHours) ?? DEFAULT_SETTINGS.airingDelayHours,
   };
 }
 
