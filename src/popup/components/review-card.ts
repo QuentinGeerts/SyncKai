@@ -235,7 +235,7 @@ export function createReviewCard(initial: PendingReview, actions: ReviewActions,
       renderFeedback(),
       h(
         'div',
-        { class: 'flex items-center justify-end gap-2' },
+        { class: 'flex flex-wrap items-center justify-end gap-x-2 gap-y-1' },
         h(
           'button',
           {
