@@ -1,7 +1,8 @@
 import { t } from '../../i18n';
+import { kai } from '../../ui/icons';
 
 export type ToastTone = 'info' | 'success' | 'warning' | 'error';
-/** bubble : bulle complète (Mochi, titre, détail, action) ; pill : pastille compacte de succès */
+/** bubble : bulle complète (Kai, titre, détail, action) ; pill : pastille compacte de succès */
 export type ToastVariant = 'bubble' | 'pill';
 /** Pastille de couleur devant une ligne de détail */
 export type ToastLineTone = 'ok' | 'neutral' | 'warning' | 'error';
@@ -157,17 +158,12 @@ function icon(size: number, viewBox: string, children: SVGElement[], extra: SvgA
   return svg('svg', { width: size, height: size, viewBox, 'aria-hidden': 'true', ...extra }, children);
 }
 
-/** Mascotte Mochi (24 px) : boule blanche, joues sakura, étincelle butter */
-function mochiIcon(): SVGElement {
-  return icon(24, '0 0 24 24', [
-    svg('path', { d: 'M13 8 C13 5 15 4 17 3', fill: 'none', stroke: '#F4EFFA', 'stroke-width': 1.2, 'stroke-linecap': 'round' }),
-    svg('path', { d: 'M17.5 0.6 L18.2 2.3 L19.9 3 L18.2 3.7 L17.5 5.4 L16.8 3.7 L15.1 3 L16.8 2.3 Z', fill: '#FFD37A' }),
-    svg('ellipse', { cx: 12, cy: 15, rx: 10, ry: 8, fill: '#FFFFFF' }),
-    svg('circle', { cx: 8.6, cy: 14.4, r: 1.2, fill: '#1A0F1C' }),
-    svg('circle', { cx: 15.4, cy: 14.4, r: 1.2, fill: '#1A0F1C' }),
-    svg('ellipse', { cx: 6.4, cy: 17, rx: 1.8, ry: 1.1, fill: '#FF8FB8' }),
-    svg('ellipse', { cx: 17.6, cy: 17, rx: 1.8, ry: 1.1, fill: '#FF8FB8' }),
-  ]);
+/** Mascotte Kai ravie (24 px, dessin simplifié) — taille fixée en attributs : pas de Tailwind dans le Shadow DOM */
+function kaiIcon(): SVGElement {
+  const mascot = kai('', { expression: 'happy', size: 'small' });
+  mascot.setAttribute('width', '24');
+  mascot.setAttribute('height', '24');
+  return mascot;
 }
 
 function warningIcon(): SVGElement {
@@ -205,11 +201,11 @@ function tailIcon(): SVGElement {
   ]);
 }
 
-/** Avatar de la bulle : Mochi, ou pictogramme coloré quand il faut agir */
+/** Avatar de la bulle : Kai, ou pictogramme coloré quand il faut agir */
 function avatarFor(tone: ToastTone): HTMLElement {
   const avatar = el('span', `avatar ${tone}`);
   avatar.setAttribute('aria-hidden', 'true');
-  avatar.append(tone === 'warning' ? warningIcon() : tone === 'error' ? errorIcon() : mochiIcon());
+  avatar.append(tone === 'warning' ? warningIcon() : tone === 'error' ? errorIcon() : kaiIcon());
   return avatar;
 }
 

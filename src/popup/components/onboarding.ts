@@ -1,7 +1,7 @@
 import { t, type MessageKey } from '../../i18n';
 import { TRACKER_LABELS, type TrackerId } from '../../shared/tracker.types';
 import { h, nodes } from '../../ui/dom';
-import { icon, mochi } from '../../ui/icons';
+import { icon, kai } from '../../ui/icons';
 import type { AccountState } from '../state';
 import { renderAlert } from './alert';
 import { kanaLabel, serviceAvatar } from './ui';
@@ -61,7 +61,7 @@ export function renderOnboarding({ anilist, mal, onLogin }: OnboardingProps): HT
     h(
       'section',
       { class: 'flex flex-col items-center gap-1 pt-2 text-center', attrs: { 'aria-labelledby': 'sk-welcome-title' } },
-      mochi('h-16 w-16', 'awake', true),
+      kai('h-16 w-16', { expression: 'happy', size: 'large', squish: true }),
       h('span', { class: 'mt-2' }, kanaLabel('ヨウコソ', 'text-sakura')),
       h('h1', { class: 'm-0 font-display text-[20px] leading-[26px] font-extrabold', attrs: { id: 'sk-welcome-title' } }, t('onboarding.welcome')),
       h('p', { class: 'm-0 mt-1 max-w-[320px] text-[13px] leading-[19px] font-semibold text-muted' }, t('onboarding.intro')),

@@ -3,6 +3,13 @@
 Toutes les évolutions notables de SyncKai sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.7.1] - 2026-10-01
+
+### Modifié
+
+- Nouvelle identité : la mascotte **Kai** remplace Mochi (icônes de l’extension, en-tête du popup, écran d’accueil, liste vide, bulles sur la page, onglet d’import).
+- README orienté utilisateur, licence MIT et politique de confidentialité (FR/EN/DE) ; préparation de la publication sur le Chrome Web Store.
+
 ## [1.7.0] - 2026-10-01
 
 Sauvegarde et interface multilingue.

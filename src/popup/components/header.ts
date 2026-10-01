@@ -1,6 +1,6 @@
 import { t, tp } from '../../i18n';
 import { h } from '../../ui/dom';
-import { icon, mochi } from '../../ui/icons';
+import { icon, kai } from '../../ui/icons';
 import type { Screen } from '../state';
 import { kanaLabel } from './ui';
 
@@ -16,7 +16,7 @@ export function renderHeader({ isSettings, onSettings }: HeaderProps): HTMLEleme
     h(
       'div',
       { class: 'flex items-center gap-2' },
-      mochi('h-6 w-6'),
+      kai('h-6 w-6', { size: 'small', tile: true }),
       h(
         'div',
         { class: 'flex items-baseline gap-1.5' },

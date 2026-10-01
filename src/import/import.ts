@@ -2,7 +2,7 @@ import { getLocale, initI18n, onLocaleChange, t, tp, type PluralKey } from '../i
 import { BACKUP_MAX_BYTES, parseBackup, summarizeBackup, type BackupSummary, type ImportMode, type ParsedBackup } from '../shared/backup';
 import { applyBackup } from '../shared/backup-store';
 import { h, nodes, preserveFocus, type Child } from '../ui/dom';
-import { icon, mochi } from '../ui/icons';
+import { icon, kai } from '../ui/icons';
 import { renderAlert } from '../popup/components/alert';
 import { BTN_GHOST, BTN_PRIMARY, CARD } from '../popup/components/ui';
 
@@ -76,7 +76,7 @@ function renderHeader(): HTMLElement {
   return h(
     'header',
     { class: 'flex items-center gap-3' },
-    mochi('h-10 w-10', 'awake'),
+    kai('h-10 w-10', { size: 'large' }),
     h(
       'div',
       { class: 'flex min-w-0 flex-col' },

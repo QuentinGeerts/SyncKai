@@ -4,7 +4,7 @@ import { TRACKER_LABELS, type TrackerId } from '../../shared/tracker.types';
 import { choosePlatformLink, formatRelativeTime, nextEpisodeBadge, pickHeroEntry, sortWatchingBy } from '../../shared/watching';
 import { WATCHING_SORTS, type NextEpisodeBadge, type WatchingEntry, type WatchingSort } from '../../shared/watching.types';
 import { h, nodes } from '../../ui/dom';
-import { icon, mochi, playIcon, sparkIcon } from '../../ui/icons';
+import { icon, kai, playIcon, sparkIcon } from '../../ui/icons';
 import { TONE_CHIP } from '../feedback';
 import type { EntryAction, WatchingState } from '../state';
 import { renderAlert } from './alert';
@@ -497,7 +497,7 @@ function renderEmpty(): HTMLElement {
     h(
       'section',
       { class: 'flex flex-1 flex-col items-center justify-center gap-2 text-center', attrs: { 'aria-labelledby': 'sk-empty-title' } },
-      mochi('h-12 w-12', 'sleeping'),
+      kai('h-12 w-12', { expression: 'sleep', size: 'large' }),
       h('h2', { class: 'm-0 mt-1 text-[15px] leading-5 font-bold', attrs: { id: 'sk-empty-title' } }, t('watching.empty.title')),
       h('p', { class: 'm-0 max-w-[300px] text-[12px] leading-[18px] font-semibold text-muted' }, t('watching.empty.text')),
       h(
