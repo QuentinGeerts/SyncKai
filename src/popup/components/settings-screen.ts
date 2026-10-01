@@ -18,8 +18,8 @@ import type { AccountState, ExclusionsState, SettingsState } from '../state';
 import { renderAlert } from './alert';
 import { BTN_GHOST, CARD, LINK, sectionLabel, segmented, SERVICE_CHIPS, serviceAvatar } from './ui';
 
-const REPO_URL = 'https://github.com/QuentinGeerts/SyncKai';
-const ISSUES_URL = 'https://github.com/QuentinGeerts/SyncKai/issues';
+const REPO_URL = 'https://github.com/Sync-Kai/SyncKai';
+const ISSUES_URL = 'https://github.com/Sync-Kai/SyncKai/issues';
 const SAVED_BADGE_MS = 1_500;
 const DIVIDER = 'border-t border-dotted border-line';
 const COMMAND_NAME = 'complete-episode';

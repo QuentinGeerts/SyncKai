@@ -32,7 +32,7 @@ Remplir les onglets **Store listing** et **Privacy** avec :
 | Fiche allemande | [docs/store/listing-de.md](store/listing-de.md) |
 | Justification des permissions | [docs/store/permissions.md](store/permissions.md) |
 
-- **Privacy policy URL** : `https://github.com/QuentinGeerts/SyncKai/blob/main/PRIVACY.md`
+- **Privacy policy URL** : `https://github.com/Sync-Kai/SyncKai/blob/main/PRIVACY.md`
 - Déclarer les données traitées (onglet Privacy) conformément à `PRIVACY.md` et cocher les certifications d'usage (pas de vente de données, pas d'usage hors fonctionnalité).
 
 ## 4. Changement d'ID (OAuth AniList + MAL)

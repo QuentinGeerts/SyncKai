@@ -65,7 +65,7 @@ Le fichier d’export est un fichier JSON téléchargé sur ton appareil. Il n�
 
 ### Contact
 
-Questions ou demandes : [GitHub Issues](https://github.com/QuentinGeerts/SyncKai/issues).
+Questions ou demandes : [GitHub Issues](https://github.com/Sync-Kai/SyncKai/issues).
 
 ---
 
@@ -126,7 +126,7 @@ The export file is a JSON file downloaded to your device. It is not sent anywher
 
 ### Contact
 
-Questions or requests: [GitHub Issues](https://github.com/QuentinGeerts/SyncKai/issues).
+Questions or requests: [GitHub Issues](https://github.com/Sync-Kai/SyncKai/issues).
 
 ---
 
@@ -187,4 +187,4 @@ Die Exportdatei ist eine JSON-Datei, die auf dein Gerät heruntergeladen wird. S
 
 ### Kontakt
 
-Fragen oder Anfragen: [GitHub Issues](https://github.com/QuentinGeerts/SyncKai/issues).
+Fragen oder Anfragen: [GitHub Issues](https://github.com/Sync-Kai/SyncKai/issues).

@@ -8,7 +8,7 @@
 <p align="center">Regarde tes animes sur Crunchyroll ou ADN : ta liste AniList / MyAnimeList se met à jour toute seule au générique.</p>
 
 <p align="center">
-  <a href="https://github.com/QuentinGeerts/SyncKai/releases"><img alt="Version" src="https://img.shields.io/github/v/release/QuentinGeerts/SyncKai?label=version"></a>
+  <a href="https://github.com/Sync-Kai/SyncKai/releases"><img alt="Version" src="https://img.shields.io/github/v/release/Sync-Kai/SyncKai?label=version"></a>
   <a href="LICENSE"><img alt="Licence MIT" src="https://img.shields.io/badge/licence-MIT-blue.svg"></a>
 </p>
 
@@ -51,7 +51,7 @@ Navigateur : Chrome 116 ou plus récent (et navigateurs basés sur Chromium).
 
 ### Installation manuelle
 
-1. Télécharge le fichier `.zip` de la dernière version sur la page [Releases](https://github.com/QuentinGeerts/SyncKai/releases) et décompresse-le.
+1. Télécharge le fichier `.zip` de la dernière version sur la page [Releases](https://github.com/Sync-Kai/SyncKai/releases) et décompresse-le.
 2. Ouvre `chrome://extensions` et active le **mode développeur** (en haut à droite).
 3. Clique sur **Charger l’extension non empaquetée** et sélectionne le dossier décompressé.
 
@@ -83,7 +83,7 @@ Pas de serveur, pas de statistiques d’usage, pas de publicité. Voir [PRIVACY.
 
 ## Contribuer
 
-Les signalements de bugs et suggestions sont les bienvenus dans les [issues](https://github.com/QuentinGeerts/SyncKai/issues).
+Les signalements de bugs et suggestions sont les bienvenus dans les [issues](https://github.com/Sync-Kai/SyncKai/issues).
 
 Prérequis : Node.js 20+ et Chrome.
 
@@ -116,4 +116,4 @@ SyncKai n’est affilié ni à Crunchyroll, ni à ADN, ni à AniList, ni à MyAn
 - Rating prompt at series end, rewatch detection, new-episode alerts, backup export / import.
 - Interface in French, English and German.
 
-Install from the [Chrome Web Store](https://chromewebstore.google.com/detail/<bientôt>) (coming soon) or manually from the [Releases](https://github.com/QuentinGeerts/SyncKai/releases) zip. No server, no analytics: see the [privacy policy](PRIVACY.md). Licensed under [MIT](LICENSE).
+Install from the [Chrome Web Store](https://chromewebstore.google.com/detail/<bientôt>) (coming soon) or manually from the [Releases](https://github.com/Sync-Kai/SyncKai/releases) zip. No server, no analytics: see the [privacy policy](PRIVACY.md). Licensed under [MIT](LICENSE).

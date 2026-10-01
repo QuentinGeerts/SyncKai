@@ -44,7 +44,7 @@ Tracking services
 Privacy
 SyncKai has no server. Your data (settings, matches, history, sign-ins) stays in your browser's local storage. The extension only reads the current episode page on Crunchyroll/ADN and only talks to AniList and MyAnimeList. Nothing is sent to the developer.
 
-Source code and issue reports: https://github.com/QuentinGeerts/SyncKai
+Source code and issue reports: https://github.com/Sync-Kai/SyncKai
 ```
 
 ## Suggested category

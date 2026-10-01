@@ -99,4 +99,4 @@ SyncKai reads the current episode page on Crunchyroll or ADN (series title, seas
 
 ### Privacy policy URL
 
-Required because user data is disclosed. Point to a privacy page in the repository, e.g. `https://github.com/QuentinGeerts/SyncKai/blob/main/PRIVACY.md` (to be created — content: the justification text above).
+Required because user data is disclosed. Point to a privacy page in the repository, e.g. `https://github.com/Sync-Kai/SyncKai/blob/main/PRIVACY.md` (to be created — content: the justification text above).

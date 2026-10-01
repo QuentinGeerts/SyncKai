@@ -44,7 +44,7 @@ Services de suivi
 Confidentialité
 SyncKai n'a pas de serveur. Tes données (réglages, correspondances, historique, connexions) restent dans le stockage local de ton navigateur. L'extension lit uniquement la page de l'épisode en cours sur Crunchyroll/ADN et communique seulement avec AniList et MyAnimeList. Rien n'est envoyé au développeur.
 
-Code source et signalement de problèmes : https://github.com/QuentinGeerts/SyncKai
+Code source et signalement de problèmes : https://github.com/Sync-Kai/SyncKai
 ```
 
 ## Catégorie suggérée

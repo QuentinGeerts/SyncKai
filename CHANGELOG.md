@@ -148,12 +148,12 @@ Première version : synchronisation automatique Crunchyroll → AniList.
 - **Vérification manuelle** des correspondances incertaines depuis le popup (fiches suggérées, recherche, numéro d'épisode), avec badge sur l'icône de l'extension.
 - **Dernières synchros** dans le popup, avec correction a posteriori d'une correspondance.
 
-[1.7.1]: https://github.com/QuentinGeerts/SyncKai/releases/tag/v1.7.1
-[1.7.0]: https://github.com/QuentinGeerts/SyncKai/releases/tag/v1.7.0
-[1.6.0]: https://github.com/QuentinGeerts/SyncKai/releases/tag/v1.6.0
-[1.5.0]: https://github.com/QuentinGeerts/SyncKai/releases/tag/v1.5.0
-[1.4.0]: https://github.com/QuentinGeerts/SyncKai/releases/tag/v1.4.0
-[1.3.0]: https://github.com/QuentinGeerts/SyncKai/releases/tag/v1.3.0
-[1.2.0]: https://github.com/QuentinGeerts/SyncKai/releases/tag/v1.2.0
-[1.1.0]: https://github.com/QuentinGeerts/SyncKai/releases/tag/v1.1.0
-[1.0.0]: https://github.com/QuentinGeerts/SyncKai/releases/tag/v1.0.0
+[1.7.1]: https://github.com/Sync-Kai/SyncKai/releases/tag/v1.7.1
+[1.7.0]: https://github.com/Sync-Kai/SyncKai/releases/tag/v1.7.0
+[1.6.0]: https://github.com/Sync-Kai/SyncKai/releases/tag/v1.6.0
+[1.5.0]: https://github.com/Sync-Kai/SyncKai/releases/tag/v1.5.0
+[1.4.0]: https://github.com/Sync-Kai/SyncKai/releases/tag/v1.4.0
+[1.3.0]: https://github.com/Sync-Kai/SyncKai/releases/tag/v1.3.0
+[1.2.0]: https://github.com/Sync-Kai/SyncKai/releases/tag/v1.2.0
+[1.1.0]: https://github.com/Sync-Kai/SyncKai/releases/tag/v1.1.0
+[1.0.0]: https://github.com/Sync-Kai/SyncKai/releases/tag/v1.0.0

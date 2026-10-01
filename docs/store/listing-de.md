@@ -44,7 +44,7 @@ Tracking-Dienste
 Datenschutz
 SyncKai hat keinen Server. Deine Daten (Einstellungen, Zuordnungen, Verlauf, Anmeldungen) bleiben im lokalen Speicher deines Browsers. Die Erweiterung liest nur die Seite der aktuellen Folge auf Crunchyroll/ADN und kommuniziert nur mit AniList und MyAnimeList. Nichts wird an den Entwickler gesendet.
 
-Quellcode und Fehlermeldungen: https://github.com/QuentinGeerts/SyncKai
+Quellcode und Fehlermeldungen: https://github.com/Sync-Kai/SyncKai
 ```
 
 ## Vorgeschlagene Kategorie
