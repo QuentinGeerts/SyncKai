@@ -1,4 +1,8 @@
+import type { AniListErrorCode } from './anilist.types';
 import type { TrackerId } from './tracker.types';
+
+/** Code d'erreur d'API (absent pour une erreur métier, ex : vérification introuvable) : décide de la relance automatique */
+export type SyncErrorCode = AniListErrorCode;
 import { isRecord } from './guards';
 
 /** Numéro d'épisode utilisé pour calculer la progression AniList */
@@ -36,7 +40,7 @@ export type ServiceOutcome =
   | { status: 'updated'; progress: number; completed: boolean }
   | { status: 'up-to-date'; progress: number }
   | { status: 'skipped'; reason: string }
-  | { status: 'error'; message: string };
+  | { status: 'error'; message: string; code?: SyncErrorCode };
 
 export interface ServiceResult {
   service: TrackerId;
@@ -46,10 +50,13 @@ export interface ServiceResult {
 /** Résultat d'une synchronisation, renvoyé au content script (toast) et au popup. */
 export type SyncOutcome =
   /** Fiche identifiée : un résultat par service connecté (succès partiel possible) */
-  | { status: 'synced'; mediaTitle: string; results: ServiceResult[] }
+  /** `queued` : au moins un service en échec a été mis en file de relance automatique */
+  | { status: 'synced'; mediaTitle: string; results: ServiceResult[]; queued?: boolean }
   | { status: 'needs-review'; reason: string }
   | { status: 'not-connected' }
-  | { status: 'error'; message: string };
+  /** Série exclue par l'utilisateur (Réglages › Séries exclues) : rien n'a été écrit */
+  | { status: 'excluded'; mediaTitle: string }
+  | { status: 'error'; message: string; code?: SyncErrorCode; queued?: boolean };
 
 /** Services à relancer après un échec partiel ("Réessayer" ne réécrit pas les services déjà à jour) */
 export function failedServices(outcome: SyncOutcome): TrackerId[] {

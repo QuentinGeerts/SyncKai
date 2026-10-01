@@ -10,6 +10,8 @@ export interface ReviewActions {
   search(query: string): Promise<Result<CandidateSummary[], string>>;
   confirm(key: string, mediaId: number, progress: number): Promise<SyncOutcome>;
   dismiss(key: string): Promise<void>;
+  /** « Ne plus synchroniser » : exclut la série puis ignore la vérification */
+  exclude(review: PendingReview): Promise<void>;
 }
 
 export interface ReviewCard {
@@ -229,7 +231,23 @@ export function createReviewCard(initial: PendingReview, actions: ReviewActions,
       renderFeedback(),
       h(
         'div',
-        { class: 'flex justify-end gap-2' },
+        { class: 'flex items-center justify-end gap-2' },
+        h(
+          'button',
+          {
+            class: `${BTN_GHOST} mr-auto gap-1 px-2 text-muted hover:text-danger`,
+            attrs: {
+              type: 'button',
+              'aria-label': `Ne plus synchroniser ${review.episode.animeTitle}`,
+              title: 'Exclut la série (toutes saisons) : réactivable dans Réglages › Séries exclues',
+              'data-focus': 'exclude',
+              ...(isSubmitting ? { disabled: '' } : {}),
+            },
+            on: { click: () => void exclude() },
+          },
+          icon('ban', 'h-3 w-3', '2.4'),
+          'Ne plus synchroniser',
+        ),
         h(
           'button',
           {
@@ -306,6 +324,16 @@ export function createReviewCard(initial: PendingReview, actions: ReviewActions,
     } catch (error: unknown) {
       console.error('[SyncKai] Impossible d’ignorer la vérification :', error);
       feedback = { tone: 'error', title: 'Action impossible', message: 'La vérification n’a pas pu être ignorée. Réessaie.' };
+      render();
+    }
+  }
+
+  async function exclude(): Promise<void> {
+    try {
+      await actions.exclude(review);
+    } catch (error: unknown) {
+      console.error('[SyncKai] Impossible d’exclure la série :', error);
+      feedback = { tone: 'error', title: 'Action impossible', message: 'La série n’a pas pu être exclue. Réessaie.' };
       render();
     }
   }

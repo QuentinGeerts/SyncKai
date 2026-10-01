@@ -9,6 +9,13 @@ import type { SyncOutcome } from './sync.types';
 import { isTrackerId, type TrackerId } from './tracker.types';
 import type { WatchingResult } from './watching.types';
 
+export interface AdjustProgressPayload {
+  /** Fiche AniList (catalogue) ; null pour une entrée MAL sans équivalent AniList */
+  mediaId: number | null;
+  malId: number | null;
+  delta: 1 | -1;
+}
+
 export interface EpisodeCompletedPayload {
   episode: EpisodeInfo;
   /** null = tous les services connectés ; sinon nouvelle tentative ciblée après un échec partiel */
@@ -33,6 +40,10 @@ export interface MessageMap {
   REOPEN_REVIEW: { payload: { key: string }; response: Result<null, AniListErrorCode | 'NOT_FOUND'> };
   /** Liste "en cours" d'un service (réponse fraîche ; le popup affiche d'abord le cache du stockage) */
   GET_WATCHING: { payload: { service: TrackerId }; response: WatchingResult };
+  /** +1 / −1 manuel depuis le popup, écrit sur tous les services connectés où la série existe */
+  ADJUST_PROGRESS: { payload: AdjustProgressPayload; response: SyncOutcome };
+  /** « Réessayer » sur une synchro en échec de la file (Activité) */
+  RETRY_QUEUED: { payload: { id: string }; response: SyncOutcome };
 }
 
 /** Messages réservés aux pages de l'extension (popup) : refusés s'ils viennent d'un content script */
@@ -43,6 +54,8 @@ export const EXTENSION_PAGE_ONLY: ReadonlySet<MessageType> = new Set([
   'RESOLVE_REVIEW',
   'REOPEN_REVIEW',
   'GET_WATCHING',
+  'ADJUST_PROGRESS',
+  'RETRY_QUEUED',
 ]);
 
 export type MessageType = keyof MessageMap;
@@ -71,6 +84,13 @@ const isSearchPayload = (p: unknown): p is { query: string } =>
 const isResolveReviewPayload = (p: unknown): p is ResolveReviewPayload =>
   isRecord(p) && isKey(p.key) && isPositiveInt(p.mediaId) && isPositiveInt(p.progress);
 const isWatchingPayload = (p: unknown): p is { service: TrackerId } => isRecord(p) && isTrackerId(p.service);
+const isAdjustProgressPayload = (p: unknown): p is AdjustProgressPayload =>
+  isRecord(p) &&
+  (p.mediaId === null || isPositiveInt(p.mediaId)) &&
+  (p.malId === null || isPositiveInt(p.malId)) &&
+  (p.mediaId !== null || p.malId !== null) &&
+  (p.delta === 1 || p.delta === -1);
+const isRetryQueuedPayload = (p: unknown): p is { id: string } => isRecord(p) && isKey(p.id);
 const isReopenReviewPayload = (p: unknown): p is { key: string } => isRecord(p) && isKey(p.key);
 
 // Record exhaustif : TypeScript impose un validateur de payload pour chaque MessageType
@@ -84,6 +104,8 @@ const PAYLOAD_GUARDS: { [K in MessageType]: (payload: unknown) => payload is Mes
   RESOLVE_REVIEW: isResolveReviewPayload,
   REOPEN_REVIEW: isReopenReviewPayload,
   GET_WATCHING: isWatchingPayload,
+  ADJUST_PROGRESS: isAdjustProgressPayload,
+  RETRY_QUEUED: isRetryQueuedPayload,
 };
 
 /** Valide le type ET le payload d'un message reçu (les content scripts tournent sur des pages tierces). */

@@ -3,6 +3,22 @@
 Toutes les évolutions notables de SyncKai sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.5.0] - 2026-10-01
+
+Fiabilité et contrôle manuel.
+
+### Ajouté
+
+- **File de synchro hors ligne** : une synchro en échec passager (réseau, limite de requêtes, erreur serveur) est mise en file et relancée automatiquement (1 min, 5 min, 15 min, 1 h, 6 h), abandonnée après ~24 h. Section « Synchros en attente » dans Activité avec « Réessayer » / « Abandonner ».
+- **+1 / −1** sur chaque série de « En cours », écrit sur tous les services connectés.
+- **Raccourci clavier** `Alt+Maj+S` : valide immédiatement l’épisode en cours (modifiable dans `chrome://extensions/shortcuts`).
+- **Exclusion par série** (« Ne plus synchroniser cette série ») depuis En cours, les cartes À vérifier et les dernières synchros ; gestion dans Réglages › Séries exclues.
+
+### Modifié
+
+- Barre d’état : synchros en échec ou en attente signalées en priorité.
+- Le badge de l’icône compte aussi les synchros abandonnées.
+
 ## [1.4.0] - 2026-10-01
 
 Refonte complète du popup (direction « Yoru Mochi · Kotatsu ») : tout se gère désormais depuis le popup.

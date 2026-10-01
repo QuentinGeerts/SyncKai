@@ -30,3 +30,11 @@ export function decideNotification(level: NotificationLevel, tone: FeedbackTone,
       return 'none';
   }
 }
+
+/**
+ * Série exclue par l'utilisateur : information, pas un succès ni une alerte.
+ * Bulle uniquement en mode détaillé ; rien en discret ni en « alertes seulement ».
+ */
+export function decideExcludedNotification(level: NotificationLevel): NotificationDisplay {
+  return level === 'detailed' ? 'bubble' : 'none';
+}

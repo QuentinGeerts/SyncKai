@@ -1,7 +1,10 @@
 import type { AniListViewer } from '../shared/anilist.types';
 import type { MalViewer } from '../shared/mal.types';
 import type { PendingReview, RecentSync } from '../shared/review.types';
+import type { ExcludedSeries } from '../shared/exclusions';
+import type { SyncQueueItem } from '../shared/queue.types';
 import type { SyncSettings } from '../shared/settings';
+import type { FeedbackTone } from '../shared/sync-feedback';
 import type { TrackerId } from '../shared/tracker.types';
 import type { WatchingList, WatchingSort } from '../shared/watching.types';
 
@@ -39,6 +42,32 @@ export interface UiState {
   sort: WatchingSort;
   /** Menu de tri ouvert : conservé dans l'état pour survivre aux nouveaux rendus */
   sortMenuOpen: boolean;
+  /** Menu « … » ouvert sur une série de « En cours » (clé d'entrée) : un seul à la fois */
+  rowMenu: string | null;
+}
+
+/** Retour bref affiché sur une ligne après une action (+1, −1, réessai…) */
+export interface InlineFeedback {
+  tone: FeedbackTone;
+  text: string;
+  /** Détail complet (infobulle) : le texte affiché est tronqué */
+  detail: string;
+}
+
+/** Action en cours ou terminée sur une série de « En cours » */
+export type EntryAction = { phase: 'pending' } | { phase: 'done'; feedback: InlineFeedback };
+
+/** Séries exclues (Réglages › Séries exclues, pastille « Exclue ») */
+export type ExclusionsState = { status: 'loading' } | { status: 'ready'; items: ExcludedSeries[] } | { status: 'error' };
+
+/** File de synchro (Activité › Synchros en attente) */
+export interface QueueState {
+  items: SyncQueueItem[];
+  /** Éléments dont le réessai ou l'abandon est en cours */
+  busyIds: ReadonlySet<string>;
+  /** Résultat du dernier réessai (l'élément a pu quitter la file entre-temps) */
+  notice: InlineFeedback | null;
+  error: string | null;
 }
 
 /** Liste « En cours » : cache affiché immédiatement puis revalidé (stale-while-revalidate). */

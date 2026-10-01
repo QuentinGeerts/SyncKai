@@ -1,4 +1,5 @@
 import { getPendingReviews } from './storage';
+import { getSyncQueue } from './sync-queue-store';
 
 const BADGE_COLOR = '#f59e0b'; // amber-500, cohérent avec les alertes "à vérifier"
 const BADGE_TEXT_COLOR = '#1A0F1C'; // texte sombre : meilleur contraste que le blanc sur l'ambre
@@ -17,11 +18,12 @@ async function setBadgeColors(background: string, text: string): Promise<void> {
   }
 }
 
-/** Affiche le nombre d'épisodes à vérifier sur l'icône de l'extension (vide si aucun). */
+/** Affiche sur l'icône le nombre d'épisodes à vérifier + synchros abandonnées (vide si aucun). */
 export async function refreshReviewBadge(): Promise<void> {
   // Coche de succès en cours : le compteur sera restauré à la fin du flash
   if (flashTimer !== undefined) return;
-  const count = (await getPendingReviews()).length;
+  const [reviews, queue] = await Promise.all([getPendingReviews(), getSyncQueue()]);
+  const count = reviews.length + queue.filter((item) => item.status === 'failed').length;
   await chrome.action.setBadgeText({ text: count > 0 ? String(count) : '' });
   if (count > 0) await setBadgeColors(BADGE_COLOR, BADGE_TEXT_COLOR);
 }

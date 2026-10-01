@@ -37,11 +37,12 @@ export function renderHeader({ isSettings, onSettings }: HeaderProps): HTMLEleme
 
 interface NavProps {
   screen: Exclude<Screen, 'settings'>;
+  /** Éléments à traiter : vérifications en attente + synchros abandonnées */
   pending: number;
   onNavigate: (screen: Exclude<Screen, 'settings'>) => void;
 }
 
-/** Navigation segmentée En cours / Activité (pastille beurre = vérifications en attente) */
+/** Navigation segmentée En cours / Activité (pastille beurre = vérifications + synchros en échec) */
 export function renderNav({ screen, pending, onNavigate }: NavProps): HTMLElement {
   const tab = (target: Exclude<Screen, 'settings'>, label: string, aria: string | null, badge: HTMLElement | null): HTMLElement => {
     const on = screen === target;
@@ -76,7 +77,7 @@ export function renderNav({ screen, pending, onNavigate }: NavProps): HTMLElemen
       'div',
       { class: 'flex flex-1 gap-1 rounded-full bg-surface p-0.5' },
       tab('watching', 'En cours', null, null),
-      tab('activity', 'Activité', pending > 0 ? `Activité, ${pending} élément${pending > 1 ? 's' : ''} à vérifier` : null, badge),
+      tab('activity', 'Activité', pending > 0 ? `Activité, ${pending} élément${pending > 1 ? 's' : ''} à traiter` : null, badge),
     ),
   );
 }

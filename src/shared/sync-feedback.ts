@@ -38,7 +38,9 @@ export function describeOutcome(outcome: SyncOutcome): SyncFeedback {
       return {
         tone: toneOf(outcome.results),
         title: isCompleted ? `${outcome.mediaTitle} terminé !` : outcome.mediaTitle,
-        message: outcome.results.map((r) => `${TRACKER_LABELS[r.service]} : ${describeServiceOutcome(r.outcome)}`).join(' · '),
+        message:
+          outcome.results.map((r) => `${TRACKER_LABELS[r.service]} : ${describeServiceOutcome(r.outcome)}`).join(' · ') +
+          (outcome.queued ? '. Nouvel essai automatique bientôt.' : ''),
       };
     }
     case 'needs-review':
@@ -49,7 +51,13 @@ export function describeOutcome(outcome: SyncOutcome): SyncFeedback {
       };
     case 'not-connected':
       return { tone: 'warning', title: 'Aucun compte connecté', message: 'Clique sur l’icône SyncKai pour connecter AniList ou MyAnimeList.' };
+    case 'excluded':
+      return { tone: 'info', title: outcome.mediaTitle, message: 'Série exclue de la synchronisation.' };
     case 'error':
-      return { tone: 'error', title: 'Échec de la synchronisation', message: outcome.message };
+      return {
+        tone: 'error',
+        title: 'Échec de la synchronisation',
+        message: outcome.queued ? `${outcome.message} Nouvel essai automatique bientôt.` : outcome.message,
+      };
   }
 }

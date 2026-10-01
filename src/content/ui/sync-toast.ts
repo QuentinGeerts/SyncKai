@@ -2,7 +2,7 @@ import type { NotificationLevel } from '../../shared/settings';
 import { describeOutcome, describeServiceOutcome } from '../../shared/sync-feedback';
 import type { ServiceOutcome, SyncOutcome } from '../../shared/sync.types';
 import { TRACKER_LABELS } from '../../shared/tracker.types';
-import { decideNotification } from './notification-policy';
+import { decideExcludedNotification, decideNotification, isAlertTone } from './notification-policy';
 import type { ToastContent, ToastLine, ToastLineTone, ToastVariant } from './toast';
 
 export const PILL_TOAST_MS = 3_000;
@@ -60,13 +60,13 @@ export function bubbleForOutcome(outcome: SyncOutcome): ToastContent {
  */
 export function toastForOutcome(outcome: SyncOutcome, level: NotificationLevel, isFullscreen: boolean): OutcomeToast | null {
   const tone = describeOutcome(outcome).tone;
-  const display = decideNotification(level, tone, isFullscreen);
+  const display = outcome.status === 'excluded' ? decideExcludedNotification(level) : decideNotification(level, tone, isFullscreen);
   switch (display) {
     case 'none':
       return null;
     case 'pill':
       return { content: pillForOutcome(outcome), variant: 'pill', autoHideMs: PILL_TOAST_MS };
     case 'bubble':
-      return { content: bubbleForOutcome(outcome), variant: 'bubble', autoHideMs: tone === 'success' ? SUCCESS_TOAST_MS : ALERT_TOAST_MS };
+      return { content: bubbleForOutcome(outcome), variant: 'bubble', autoHideMs: isAlertTone(tone) ? ALERT_TOAST_MS : SUCCESS_TOAST_MS };
   }
 }

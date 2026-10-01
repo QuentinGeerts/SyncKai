@@ -1,8 +1,11 @@
 import { isAniListViewer, type ViewerErrorCode, type ViewerResult } from '../shared/anilist.types';
 import { isAniListToken, type AuthResult } from '../shared/auth.types';
 import { refreshReviewBadge } from '../shared/badge';
+import type { EpisodeInfo } from '../shared/episode.types';
+import { EXCLUDED_SERIES_KEY, excludeSeries, getExcludedSeries, includeSeries, platformSeriesKey } from '../shared/exclusions';
 import { isMalViewer, type MalViewerResult } from '../shared/mal.types';
 import { sendMessage } from '../shared/messages';
+import type { RecentSync } from '../shared/review.types';
 import { DEFAULT_SETTINGS, getSettings, normalizeSettings, SETTINGS_STORAGE_KEY } from '../shared/settings';
 import {
   clearAniListSession,
@@ -18,23 +21,31 @@ import {
   getValidToken,
   STORAGE_KEYS,
 } from '../shared/storage';
+import { getSyncQueue, removeQueueItem, SYNC_QUEUE_KEY } from '../shared/sync-queue-store';
+import type { SyncOutcome } from '../shared/sync.types';
 import { isTrackerId, TRACKER_IDS, TRACKER_LABELS, type TrackerId } from '../shared/tracker.types';
 import { formatRelativeTime } from '../shared/watching';
-import { DEFAULT_WATCHING_SORT, isWatchingSort, type WatchingResult, type WatchingSort } from '../shared/watching.types';
+import { DEFAULT_WATCHING_SORT, isWatchingSort, type WatchingEntry, type WatchingResult, type WatchingSort } from '../shared/watching.types';
 import { h, nodes, preserveFocus } from '../ui/dom';
 import { renderFooter, type FooterStatus } from './components/footer';
 import { renderHeader, renderNav, renderSettingsBar } from './components/header';
 import { renderOnboarding } from './components/onboarding';
+import { renderQueueSection } from './components/queue-section';
 import { renderRecentSyncs } from './components/recent-syncs';
 import type { ReviewActions } from './components/review-card';
 import { createReviewSection } from './components/review-section';
 import { createSettingsScreen } from './components/settings-screen';
-import { renderWatchingScreen } from './components/watching-screen';
+import { entryKey, renderWatchingScreen } from './components/watching-screen';
+import { adjustFeedback, errorFeedback, retryFeedback } from './feedback';
 import {
   createStore,
   LOGGED_OUT,
   type AccountState,
   type AniListState,
+  type EntryAction,
+  type ExclusionsState,
+  type InlineFeedback,
+  type QueueState,
   type MalState,
   type Screen,
   type SettingsState,
@@ -49,6 +60,9 @@ const SW_UNREACHABLE = 'Impossible de contacter l’extension. Réessaie.';
 const AUTH_ERRORS: ReadonlySet<ViewerErrorCode> = new Set(['NOT_AUTHENTICATED', 'TOKEN_INVALID']);
 const PREFS_KEY = 'popupPrefs';
 const CLOCK_TICK_MS = 60_000;
+/** Durée d'affichage du retour d'une action sur une série (+1, −1, exclusion) */
+const ENTRY_FEEDBACK_MS = 3_000;
+const QUEUE_NOTICE_MS = 5_000;
 
 interface PopupPrefs {
   source: TrackerId;
@@ -64,9 +78,12 @@ function getRoot(): HTMLDivElement {
 const anilistStore = createStore<AniListState>({ status: 'loading' });
 const malStore = createStore<MalState>({ status: 'loading' });
 const syncStore = createStore<SyncData>({ reviews: [], recentSyncs: [], busyKey: null, recentError: null });
-const uiStore = createStore<UiState>({ screen: 'watching', previous: 'watching', source: 'anilist', sort: DEFAULT_WATCHING_SORT, sortMenuOpen: false });
+const uiStore = createStore<UiState>({ screen: 'watching', previous: 'watching', source: 'anilist', sort: DEFAULT_WATCHING_SORT, sortMenuOpen: false, rowMenu: null });
 const watchingStore = createStore<WatchingState>({ status: 'idle' });
 const settingsStore = createStore<SettingsState>({ status: 'loading' });
+const entryActionsStore = createStore<ReadonlyMap<string, EntryAction>>(new Map());
+const exclusionsStore = createStore<ExclusionsState>({ status: 'loading' });
+const queueStore = createStore<QueueState>({ items: [], busyIds: new Set(), notice: null, error: null });
 const version = chrome.runtime.getManifest().version;
 let now = Date.now();
 
@@ -103,6 +120,11 @@ const reviewActions: ReviewActions = {
     await deletePendingReview(key);
     await refreshReviewBadge();
   },
+  async exclude(review) {
+    // Fiche suggérée volontairement ignorée (par définition incertaine) : seule une fiche déjà écrite est reprise
+    await excludeSeries({ platformKey: platformSeriesKey(review.episode), mediaId: review.previous?.mediaId ?? null, label: review.episode.animeTitle });
+    await reviewActions.dismiss(review.key);
+  },
 };
 
 // ─── Mise en page ───────────────────────────────────────────────────────────
@@ -114,8 +136,9 @@ const barSlot = h('div', { class: 'contents' });
 const watchingSlot = h('div', { class: 'min-h-full' });
 const onboardingSlot = h('div', { class: 'min-h-full' });
 const reviewSection = createReviewSection(reviewActions);
+const queueSlot = h('div', { class: 'contents' });
 const recentSlot = h('div', { class: 'contents' });
-const activityScreen = h('div', { class: 'flex flex-col gap-4 pb-1' }, reviewSection.element, recentSlot);
+const activityScreen = h('div', { class: 'flex flex-col gap-4 pb-1' }, queueSlot, reviewSection.element, recentSlot);
 const settingsScreen = createSettingsScreen();
 const footerSlot = h('div', { class: 'contents' });
 const main = h(
@@ -134,8 +157,8 @@ root.replaceChildren(headerSlot, barSlot, main, footerSlot);
 function navigate(screen: Screen): void {
   const ui = uiStore.get();
   if (ui.screen === screen) return;
-  // Changement d'écran : le menu de tri éventuellement ouvert se ferme
-  uiStore.set({ ...ui, screen, previous: ui.screen === 'settings' ? ui.previous : ui.screen, sortMenuOpen: false });
+  // Changement d'écran : les menus éventuellement ouverts se ferment
+  uiStore.set({ ...ui, screen, previous: ui.screen === 'settings' ? ui.previous : ui.screen, sortMenuOpen: false, rowMenu: null });
   main.scrollTop = 0;
 }
 
@@ -158,7 +181,7 @@ async function savePrefs(): Promise<void> {
 }
 
 async function pickSource(source: TrackerId): Promise<void> {
-  uiStore.set({ ...uiStore.get(), source, sortMenuOpen: false });
+  uiStore.set({ ...uiStore.get(), source, sortMenuOpen: false, rowMenu: null });
   await savePrefs();
 }
 
@@ -190,7 +213,8 @@ function focusInWatching(selector: string): void {
 function setSortMenu(open: boolean, restoreFocus = true): void {
   const ui = uiStore.get();
   if (ui.sortMenuOpen === open) return;
-  uiStore.set({ ...ui, sortMenuOpen: open });
+  // Un seul menu ouvert à la fois
+  uiStore.set({ ...ui, sortMenuOpen: open, rowMenu: open ? null : ui.rowMenu });
   // Le rendu est synchrone : à l'ouverture, focus sur l'option cochée ; à la fermeture, retour au bouton
   if (open) focusInWatching('[role="menuitemradio"][aria-checked="true"]');
   else if (restoreFocus) focusInWatching('[data-focus="sort-trigger"]');
@@ -202,30 +226,53 @@ async function pickSort(sort: WatchingSort): Promise<void> {
   await savePrefs();
 }
 
-function onSortMenuPointerDown(event: PointerEvent): void {
-  if (event.target instanceof Element && event.target.closest('[data-sort-root]')) return;
-  setSortMenu(false, false);
+/** Menu « … » d'une série : ouverture = focus sur la première action, fermeture = retour au bouton */
+function setRowMenu(key: string | null, restoreFocus = true): void {
+  const ui = uiStore.get();
+  if (ui.rowMenu === key) return;
+  const previous = ui.rowMenu;
+  uiStore.set({ ...ui, rowMenu: key, sortMenuOpen: false });
+  if (key !== null) {
+    const root = watchingSlot.querySelector<HTMLElement>(`[data-menu-root="${key}"]`);
+    root?.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)')?.focus({ preventScroll: true });
+    // Dernières lignes : le menu déborde vers le bas, on le ramène dans la zone visible
+    root?.querySelector('[role="menu"]')?.scrollIntoView({ block: 'nearest' });
+  } else if (restoreFocus && previous !== null) {
+    focusInWatching(`[data-focus="more-${previous}"]`);
+  }
 }
 
-function onSortMenuKeyDown(event: KeyboardEvent): void {
+function onMenuPointerDown(event: PointerEvent): void {
+  const target = event.target instanceof Element ? event.target : null;
+  const ui = uiStore.get();
+  if (ui.sortMenuOpen && !target?.closest('[data-sort-root]')) setSortMenu(false, false);
+  const rowRoot = target?.closest<HTMLElement>('[data-menu-root]');
+  if (ui.rowMenu !== null && rowRoot?.dataset.menuRoot !== ui.rowMenu) setRowMenu(null, false);
+}
+
+function onMenuKeyDown(event: KeyboardEvent): void {
   if (event.key !== 'Escape') return;
   // Échap ferme le menu sans fermer le popup
   event.preventDefault();
   event.stopPropagation();
-  setSortMenu(false);
+  const ui = uiStore.get();
+  if (ui.sortMenuOpen) setSortMenu(false);
+  if (ui.rowMenu !== null) setRowMenu(null);
 }
 
-let sortMenuListening = false;
+let menuListening = false;
 
-function syncSortMenuListeners({ sortMenuOpen }: UiState): void {
-  if (sortMenuOpen === sortMenuListening) return;
-  sortMenuListening = sortMenuOpen;
-  if (sortMenuOpen) {
-    document.addEventListener('pointerdown', onSortMenuPointerDown, true);
-    document.addEventListener('keydown', onSortMenuKeyDown, true);
+/** Écouteurs globaux (clic extérieur, Échap) présents seulement pendant qu'un menu est ouvert */
+function syncMenuListeners({ sortMenuOpen, rowMenu }: UiState): void {
+  const open = sortMenuOpen || rowMenu !== null;
+  if (open === menuListening) return;
+  menuListening = open;
+  if (open) {
+    document.addEventListener('pointerdown', onMenuPointerDown, true);
+    document.addEventListener('keydown', onMenuKeyDown, true);
   } else {
-    document.removeEventListener('pointerdown', onSortMenuPointerDown, true);
-    document.removeEventListener('keydown', onSortMenuKeyDown, true);
+    document.removeEventListener('pointerdown', onMenuPointerDown, true);
+    document.removeEventListener('keydown', onMenuKeyDown, true);
   }
 }
 
@@ -238,12 +285,22 @@ function footerStatus(): FooterStatus {
     return state.status === 'logged-out' && state.expired;
   });
   const { reviews, recentSyncs } = syncStore.get();
+  const { failed, pending } = queueCounts();
 
+  // Priorité : synchros abandonnées, vérifications, relances en attente, session expirée
+  if (connected.length > 0 && failed > 0) return { kind: 'queue-failed', count: failed };
   if (connected.length > 0 && reviews.length > 0) return { kind: 'pending', count: reviews.length };
+  if (connected.length > 0 && pending > 0) return { kind: 'queue-pending', count: pending };
   if (expired) return { kind: 'expired', service: expired };
   if (connected.length === 0) return { kind: 'none' };
   const latest = recentSyncs[0];
   return { kind: 'ok', relative: latest ? formatRelativeTime(latest.syncedAt, now) : null };
+}
+
+function queueCounts(): { failed: number; pending: number } {
+  const { items } = queueStore.get();
+  const failed = items.filter((item) => item.status === 'failed').length;
+  return { failed, pending: items.length - failed };
 }
 
 type FooterChip = { service: TrackerId; state: 'ok' | 'expired' };
@@ -271,8 +328,10 @@ function renderWatching(): void {
     return state.status === 'ready' ? state.settings.preferredPlayer : DEFAULT_SETTINGS.preferredPlayer;
   })();
   const services = connectedServices();
-  const { sort, sortMenuOpen } = uiStore.get();
-  const inputs = [watchingStore.get(), now, preferredPlayer, services.join(), sort, sortMenuOpen];
+  const { sort, sortMenuOpen, rowMenu } = uiStore.get();
+  const exclusions = exclusionsStore.get();
+  const actions = entryActionsStore.get();
+  const inputs = [watchingStore.get(), now, preferredPlayer, services.join(), sort, sortMenuOpen, rowMenu, exclusions, actions];
   if (inputs.length === watchingMemo.length && inputs.every((value, i) => value === watchingMemo[i])) return;
   watchingMemo = inputs;
 
@@ -289,11 +348,21 @@ function renderWatching(): void {
         onSortMenu: (open) => setSortMenu(open),
         onPickSort: (value) => void pickSort(value),
         onRetry: () => void reloadWatching(),
+        controls: {
+          actions,
+          excludedMediaIds: new Set(exclusions.status === 'ready' ? exclusions.items.flatMap((e) => (e.mediaId !== null ? [e.mediaId] : [])) : []),
+          rowMenu,
+          onRowMenu: (key) => setRowMenu(key),
+          onAdjust: (entry, delta) => void adjustProgress(entry, delta),
+          onExclude: (entry) => void excludeEntry(entry),
+          onInclude: (entry) => void includeEntry(entry),
+        },
       }),
     ),
   );
-  // Menu ouvert mais contrôle absent (liste vide, chargement, erreur) : on le referme après ce rendu
+  // Menu ouvert mais contrôle absent (liste vide, chargement, erreur, série disparue) : on le referme après ce rendu
   if (sortMenuOpen && !watchingSlot.querySelector('[data-sort-root]')) queueMicrotask(() => setSortMenu(false, false));
+  if (rowMenu !== null && !watchingSlot.querySelector(`[data-menu-root="${rowMenu}"]`)) queueMicrotask(() => setRowMenu(null, false));
 }
 
 function render(): void {
@@ -301,7 +370,8 @@ function render(): void {
   const onboarding = isOnboarding();
   const isSettings = ui.screen === 'settings';
   const data = syncStore.get();
-  const pending = connectedServices().length > 0 ? data.reviews.length : 0;
+  // Pastille « Activité » : vérifications + synchros abandonnées (à traiter par l'utilisateur)
+  const pending = connectedServices().length > 0 ? data.reviews.length + queueCounts().failed : 0;
 
   preserveFocus(root, () => {
     headerSlot.replaceChildren(renderHeader({ isSettings, onSettings: toggleSettings }));
@@ -325,6 +395,17 @@ function render(): void {
       );
     }
 
+    queueSlot.replaceChildren(
+      ...nodes([
+        connectedServices().length > 0 &&
+          renderQueueSection({
+            queue: queueStore.get(),
+            now,
+            onRetry: (id) => void retryQueued(id),
+            onAbandon: (id) => void abandonQueued(id),
+          }),
+      ]),
+    );
     reviewSection.update(connectedServices().length > 0 ? data.reviews : []);
     recentSlot.replaceChildren(
       renderRecentSyncs({
@@ -333,6 +414,8 @@ function render(): void {
         busyKey: data.busyKey,
         error: data.recentError,
         onCorrect: (key) => void handleCorrect(key),
+        isExcluded: isRecentExcluded,
+        onExclude: (sync) => void excludeRecent(sync),
       }),
     );
 
@@ -527,6 +610,184 @@ function syncWatchingSource(): void {
   }
 }
 
+// ─── Actions sur une série (+1, −1, exclusion) ──────────────────────────────
+
+const entryFeedbackTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function setEntryAction(key: string, action: EntryAction | null): void {
+  const next = new Map(entryActionsStore.get());
+  if (action) next.set(key, action);
+  else next.delete(key);
+  entryActionsStore.set(next);
+}
+
+/** Retour bref (~3 s) à la place de la pastille d'état de la série */
+function flashEntryFeedback(key: string, feedback: InlineFeedback): void {
+  clearTimeout(entryFeedbackTimers.get(key));
+  setEntryAction(key, { phase: 'done', feedback });
+  entryFeedbackTimers.set(
+    key,
+    setTimeout(() => {
+      entryFeedbackTimers.delete(key);
+      setEntryAction(key, null);
+    }, ENTRY_FEEDBACK_MS),
+  );
+}
+
+/** Mise à jour optimiste de la progression affichée (avant la revalidation de la liste) */
+function patchWatchingProgress(entry: WatchingEntry, outcome: SyncOutcome): void {
+  const shown = watchingStore.get();
+  if (shown.status !== 'ready' || outcome.status !== 'synced') return;
+  const result = outcome.results.find((r) => r.service === shown.service)?.outcome;
+  if (result?.status !== 'updated' && result?.status !== 'up-to-date') return;
+  const key = entryKey(entry);
+  const entries = shown.list.entries.map((e) => (entryKey(e) === key ? { ...e, progress: result.progress } : e));
+  watchingStore.set({ ...shown, list: { ...shown.list, entries } });
+}
+
+async function adjustProgress(entry: WatchingEntry, delta: 1 | -1): Promise<void> {
+  const key = entryKey(entry);
+  if (entryActionsStore.get().get(key)?.phase === 'pending') return;
+  clearTimeout(entryFeedbackTimers.get(key));
+  setEntryAction(key, { phase: 'pending' });
+
+  let outcome: SyncOutcome;
+  try {
+    outcome = await sendMessage('ADJUST_PROGRESS', { mediaId: entry.mediaId, malId: entry.malId, delta });
+  } catch (error: unknown) {
+    console.error('[SyncKai] Service worker injoignable :', error);
+    outcome = { status: 'error', message: SW_UNREACHABLE };
+  }
+  patchWatchingProgress(entry, outcome);
+  flashEntryFeedback(key, adjustFeedback(outcome, delta));
+  // Revalidation silencieuse : la liste reflète ensuite l'état réel des services
+  scheduleWatchingRevalidation();
+}
+
+async function excludeEntry(entry: WatchingEntry): Promise<void> {
+  if (entry.mediaId === null) return;
+  const key = entryKey(entry);
+  try {
+    // Aucune clé plateforme dérivable depuis la liste : l'exclusion porte sur la fiche AniList
+    await excludeSeries({ platformKey: null, mediaId: entry.mediaId, label: entry.title });
+    flashEntryFeedback(key, { tone: 'info', text: 'Synchro désactivée', detail: 'Réactivable dans Réglages › Séries exclues' });
+  } catch (error: unknown) {
+    console.error('[SyncKai] Exclusion de la série impossible :', error);
+    flashEntryFeedback(key, errorFeedback('Exclusion impossible, réessaie'));
+  }
+  await loadExclusions();
+}
+
+async function includeEntry(entry: WatchingEntry): Promise<void> {
+  const exclusions = exclusionsStore.get();
+  if (exclusions.status !== 'ready' || entry.mediaId === null) return;
+  const key = entryKey(entry);
+  try {
+    const matches = exclusions.items.filter((e) => e.mediaId === entry.mediaId);
+    for (const match of matches) await includeSeries(match.id);
+    flashEntryFeedback(key, { tone: 'success', text: 'Synchro réactivée', detail: 'Les prochains épisodes seront de nouveau synchronisés' });
+  } catch (error: unknown) {
+    console.error('[SyncKai] Réactivation de la série impossible :', error);
+    flashEntryFeedback(key, errorFeedback('Réactivation impossible, réessaie'));
+  }
+  await loadExclusions();
+}
+
+/** Clé de série plateforme, sans faire échouer le rendu si elle est incalculable */
+function seriesKeyOrNull(episode: EpisodeInfo): string | null {
+  try {
+    return platformSeriesKey(episode);
+  } catch {
+    return null;
+  }
+}
+
+function isRecentExcluded(sync: RecentSync): boolean {
+  const exclusions = exclusionsStore.get();
+  if (exclusions.status !== 'ready' || exclusions.items.length === 0) return false;
+  const platformKey = seriesKeyOrNull(sync.episode);
+  return exclusions.items.some((e) => e.mediaId === sync.mediaId || (e.platformKey !== null && e.platformKey === platformKey));
+}
+
+async function excludeRecent(sync: RecentSync): Promise<void> {
+  let error: string | null = null;
+  try {
+    await excludeSeries({ platformKey: platformSeriesKey(sync.episode), mediaId: sync.mediaId, label: sync.episode.animeTitle });
+  } catch (e: unknown) {
+    console.error('[SyncKai] Exclusion de la série impossible :', e);
+    error = 'La série n’a pas pu être exclue. Réessaie.';
+  }
+  syncStore.set({ ...syncStore.get(), recentError: error });
+  await loadExclusions();
+}
+
+async function loadExclusions(): Promise<void> {
+  try {
+    exclusionsStore.set({ status: 'ready', items: await getExcludedSeries() });
+  } catch (error: unknown) {
+    console.error('[SyncKai] Lecture des séries exclues impossible :', error);
+    exclusionsStore.set({ status: 'error' });
+  }
+}
+
+// ─── File de synchro (Activité › Synchros en attente) ──────────────────────
+
+let queueNoticeTimer: ReturnType<typeof setTimeout> | undefined;
+
+function setQueueBusy(id: string, busy: boolean): void {
+  const current = queueStore.get();
+  const busyIds = new Set(current.busyIds);
+  if (busy) busyIds.add(id);
+  else busyIds.delete(id);
+  queueStore.set({ ...current, busyIds });
+}
+
+function showQueueNotice(notice: InlineFeedback): void {
+  clearTimeout(queueNoticeTimer);
+  queueStore.set({ ...queueStore.get(), notice });
+  queueNoticeTimer = setTimeout(() => queueStore.set({ ...queueStore.get(), notice: null }), QUEUE_NOTICE_MS);
+}
+
+async function retryQueued(id: string): Promise<void> {
+  if (queueStore.get().busyIds.has(id)) return;
+  setQueueBusy(id, true);
+  let outcome: SyncOutcome;
+  try {
+    outcome = await sendMessage('RETRY_QUEUED', { id });
+  } catch (error: unknown) {
+    console.error('[SyncKai] Service worker injoignable :', error);
+    outcome = { status: 'error', message: SW_UNREACHABLE };
+  }
+  setQueueBusy(id, false);
+  showQueueNotice(retryFeedback(outcome));
+  await loadQueue();
+}
+
+async function abandonQueued(id: string): Promise<void> {
+  if (queueStore.get().busyIds.has(id)) return;
+  setQueueBusy(id, true);
+  let error: string | null = null;
+  try {
+    await removeQueueItem(id);
+  } catch (e: unknown) {
+    console.error('[SyncKai] Suppression de la synchro en attente impossible :', e);
+    error = 'La synchro n’a pas pu être abandonnée. Réessaie.';
+  }
+  setQueueBusy(id, false);
+  await loadQueue();
+  if (error) queueStore.set({ ...queueStore.get(), error });
+}
+
+async function loadQueue(): Promise<void> {
+  try {
+    const items = await getSyncQueue();
+    queueStore.set({ ...queueStore.get(), items, error: null });
+  } catch (error: unknown) {
+    console.error('[SyncKai] Lecture de la file de synchro impossible :', error);
+    queueStore.set({ ...queueStore.get(), error: 'Impossible de lire les synchros en attente.' });
+  }
+}
+
 // ─── Données de synchro ───────────────────────────────────────────────────
 
 /** "Corriger" : le service worker recharge les fiches candidates et rouvre une carte. */
@@ -590,11 +851,15 @@ chrome.storage.onChanged.addListener((changes, areaName): void => {
   }
 
   if (changes[STORAGE_KEYS.pendingReviews] || changes[STORAGE_KEYS.recentSyncs]) void loadSyncData();
+void loadExclusions();
+void loadQueue();
 
   const settingsChange = changes[SETTINGS_STORAGE_KEY];
   if (settingsChange) settingsStore.set({ status: 'ready', settings: normalizeSettings(settingsChange.newValue) });
 
   if (changes[STORAGE_KEYS.mediaMappings]) void settingsScreen.refreshMappings();
+  if (changes[EXCLUDED_SERIES_KEY]) void loadExclusions();
+  if (changes[SYNC_QUEUE_KEY]) void loadQueue();
 
   // Synchro dans un onglet : le service worker ne met pas le cache « En cours » à jour → revalidation
   if (changes[STORAGE_KEYS.recentSyncs]) scheduleWatchingRevalidation();
@@ -618,8 +883,12 @@ function scheduleWatchingRevalidation(): void {
 anilistStore.subscribe(syncWatchingSource);
 malStore.subscribe(syncWatchingSource);
 uiStore.subscribe(syncWatchingSource);
-uiStore.subscribe(syncSortMenuListeners);
-for (const store of [anilistStore, malStore, syncStore, uiStore, watchingStore]) store.subscribe(render);
+uiStore.subscribe(syncMenuListeners);
+for (const store of [anilistStore, malStore, syncStore, uiStore, watchingStore, entryActionsStore, queueStore]) store.subscribe(render);
+exclusionsStore.subscribe((state) => {
+  settingsScreen.updateExclusions(state);
+  render();
+});
 settingsStore.subscribe((state) => {
   settingsScreen.updateSettings(state);
   render();

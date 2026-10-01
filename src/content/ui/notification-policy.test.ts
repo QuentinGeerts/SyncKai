@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FeedbackTone } from '../../shared/sync-feedback';
 import type { NotificationLevel } from '../../shared/settings';
-import { decideNotification, isAlertTone, showsProgress } from './notification-policy';
+import { decideExcludedNotification, decideNotification, isAlertTone, showsProgress } from './notification-policy';
 
 const LEVELS: NotificationLevel[] = ['discreet', 'detailed', 'alerts-only'];
 const ALERTS: FeedbackTone[] = ['warning', 'error'];
@@ -46,5 +46,13 @@ describe('isAlertTone', () => {
     expect(isAlertTone('error')).toBe(true);
     expect(isAlertTone('success')).toBe(false);
     expect(isAlertTone('info')).toBe(false);
+  });
+});
+
+describe('decideExcludedNotification', () => {
+  it('bulle en mode détaillé, rien sinon', () => {
+    expect(decideExcludedNotification('detailed')).toBe('bubble');
+    expect(decideExcludedNotification('discreet')).toBe('none');
+    expect(decideExcludedNotification('alerts-only')).toBe('none');
   });
 });

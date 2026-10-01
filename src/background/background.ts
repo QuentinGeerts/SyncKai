@@ -3,6 +3,8 @@ import { getViewer } from './api/viewer';
 import { getWatchingList } from './api/watching';
 import { loginWithAniList } from './auth/anilist';
 import { loginWithMal } from './auth/mal';
+import { adjustProgress, handleCommand } from './controls';
+import { ensureQueueAlarm, processSyncQueue, QUEUE_ALARM, recordSyncOutcome, retryQueued } from './sync/queue';
 import { reopenReview, resolveReview, searchCandidates, syncEpisode } from './sync/sync-service';
 import { refreshReviewBadge } from '../shared/badge';
 import {
@@ -32,6 +34,8 @@ const UNEXPECTED_ERRORS: { [K in MessageType]: MessageResponse<K> } = {
   LOGIN_MAL: { ok: false, code: 'UNKNOWN', message: 'Erreur inattendue.' },
   GET_MAL_VIEWER: { ok: false, code: 'API_ERROR', message: 'Erreur inattendue.' },
   EPISODE_COMPLETED: { status: 'error', message: 'Erreur inattendue pendant la synchronisation.' },
+  ADJUST_PROGRESS: { status: 'error', message: 'Erreur inattendue.' },
+  RETRY_QUEUED: { status: 'error', message: 'Erreur inattendue.' },
   SEARCH_ANIME: { ok: false, code: 'API_ERROR', message: 'Erreur inattendue.' },
   RESOLVE_REVIEW: { status: 'error', message: 'Erreur inattendue pendant la synchronisation.' },
   REOPEN_REVIEW: { ok: false, code: 'API_ERROR', message: 'Erreur inattendue.' },
@@ -56,7 +60,10 @@ const handlers: MessageHandlers = {
     return result;
   },
   GET_MAL_VIEWER: () => getMalViewer(),
-  EPISODE_COMPLETED: ({ episode, services }) => syncEpisode(episode, services),
+  // Échec passager → mise en file de relance automatique (le résultat porte alors `queued: true`)
+  EPISODE_COMPLETED: async ({ episode, services }) => recordSyncOutcome(episode, services, await syncEpisode(episode, services)),
+  ADJUST_PROGRESS: (payload) => adjustProgress(payload),
+  RETRY_QUEUED: ({ id }) => retryQueued(id),
   SEARCH_ANIME: ({ query }) => searchCandidates(query),
   RESOLVE_REVIEW: (payload) => resolveReview(payload),
   REOPEN_REVIEW: ({ key }) => reopenReview(key),
@@ -95,3 +102,20 @@ chrome.runtime.onMessage.addListener(
     return true; // Garde le canal ouvert pour la réponse asynchrone
   },
 );
+
+// ─── File de relance et raccourci clavier ─────────────────────────────────
+
+chrome.alarms.onAlarm.addListener((alarm): void => {
+  if (alarm.name === QUEUE_ALARM) void processSyncQueue();
+});
+
+chrome.commands.onCommand.addListener((command): void => {
+  void handleCommand(command);
+});
+
+chrome.runtime.onStartup.addListener((): void => {
+  void ensureQueueAlarm();
+});
+chrome.runtime.onInstalled.addListener((): void => {
+  void ensureQueueAlarm();
+});

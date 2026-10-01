@@ -5,6 +5,7 @@ import { isMalToken, isMalViewer, type MalToken, type MalViewer } from './mal.ty
 import { isPendingReview, isRecentSync, type PendingReview, type RecentSync } from './review.types';
 import { isMediaMapping, type MediaMapping } from './sync.types';
 import type { TrackerId } from './tracker.types';
+import { SYNC_QUEUE_KEY } from './sync-queue-store';
 import { isWatchingList, type WatchingList } from './watching.types';
 
 const MAX_PENDING_REVIEWS = 20;
@@ -16,7 +17,7 @@ const STORAGE_LOCK = 'synckai:storage';
  * service worker partagent l'origine chrome-extension:// : le même verrou Web Locks les coordonne,
  * ce qui évite qu'une écriture en écrase une autre (ex : "Ignorer" pendant une synchro).
  */
-function withStorageLock<T>(task: () => Promise<T>): Promise<T> {
+export function withStorageLock<T>(task: () => Promise<T>): Promise<T> {
   return navigator.locks.request(STORAGE_LOCK, task);
 }
 
@@ -134,11 +135,11 @@ export function clearAniListSession(): Promise<void> {
 }
 
 /**
- * Vérifications et dernières synchros : propres à l'utilisateur, effacées quand plus aucun
+ * Vérifications, dernières synchros et file de relance : propres à l'utilisateur, effacées quand plus aucun
  * service de suivi n'est connecté (déconnexion du dernier compte).
  */
 export function clearUserSyncData(): Promise<void> {
-  return withStorageLock(() => chrome.storage.local.remove([STORAGE_KEYS.pendingReviews, STORAGE_KEYS.recentSyncs, STORAGE_KEYS.watchingCache]));
+  return withStorageLock(() => chrome.storage.local.remove([STORAGE_KEYS.pendingReviews, STORAGE_KEYS.recentSyncs, STORAGE_KEYS.watchingCache, SYNC_QUEUE_KEY]));
 }
 
 // ─── Session MyAnimeList ──────────────────────────────────────────────────

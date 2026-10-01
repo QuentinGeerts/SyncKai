@@ -1,4 +1,5 @@
 import type { EpisodeInfo } from '../../shared/episode.types';
+import { isExcluded, platformSeriesKey } from '../../shared/exclusions';
 import { sendMessage } from '../../shared/messages';
 import { failedServices } from '../../shared/sync.types';
 import type { TrackerId } from '../../shared/tracker.types';
@@ -43,6 +44,8 @@ function formatEpisodeShort(e: EpisodeInfo): string {
 
 export interface WatchSession {
   readonly episodeId: string;
+  /** Raccourci « valider l'épisode en cours » : complétion immédiate, sans attendre le % ni le générique */
+  forceComplete(): void;
   /** Retire tous les écouteurs/observers liés à cet épisode */
   destroy(): void;
 }
@@ -101,7 +104,31 @@ export function startWatchSession(adapter: StreamingAdapter, episodeId: string):
       log.info('Synchronisation en pause (options) : épisode non envoyé');
       return;
     }
+    if (await isSeriesExcluded(episode)) {
+      log.info(`Série exclue (Réglages › Séries exclues) : épisode non envoyé (${platformSeriesKey(episode)})`);
+      return;
+    }
     await syncWithFeedback(episode, settings.notificationLevel);
+  }
+
+  /** Exclusion côté plateforme ; stockage illisible → non exclu (le service worker revérifie après résolution) */
+  async function isSeriesExcluded(episode: EpisodeInfo): Promise<boolean> {
+    try {
+      return await isExcluded({ platformKey: platformSeriesKey(episode) });
+    } catch (error: unknown) {
+      log.warn('Exclusions illisibles :', error);
+      return false;
+    }
+  }
+
+  function forceComplete(): void {
+    if (signal.aborted) return;
+    if (completionReported) {
+      log.info('Raccourci « valider l’épisode » : épisode déjà synchronisé');
+      return;
+    }
+    log.info('Raccourci « valider l’épisode » : complétion immédiate');
+    void reportCompletion();
   }
 
   /**
@@ -192,5 +219,5 @@ export function startWatchSession(adapter: StreamingAdapter, episodeId: string):
   void waitForMetadata();
   void init();
 
-  return { episodeId, destroy };
+  return { episodeId, forceComplete, destroy };
 }

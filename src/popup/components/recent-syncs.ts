@@ -11,6 +11,9 @@ interface RecentSyncsProps {
   busyKey: string | null;
   error: string | null;
   onCorrect: (key: string) => void;
+  /** Série exclue de la synchronisation (pastille « Exclue » à la place du bouton) */
+  isExcluded: (sync: RecentSync) => boolean;
+  onExclude: (sync: RecentSync) => void;
 }
 
 function episodeNumber(sync: RecentSync): string {
@@ -18,10 +21,11 @@ function episodeNumber(sync: RecentSync): string {
   return n !== null ? ` · E${n}` : '';
 }
 
-export function renderRecentSyncs({ syncs, pendingKeys, busyKey, error, onCorrect }: RecentSyncsProps): HTMLElement {
+export function renderRecentSyncs({ syncs, pendingKeys, busyKey, error, onCorrect, isExcluded, onExclude }: RecentSyncsProps): HTMLElement {
   const rows = syncs.map((sync) => {
     const isPending = pendingKeys.has(sync.key);
     const isBusy = busyKey === sync.key;
+    const excluded = isExcluded(sync);
     const title = `${sync.episode.animeTitle}${episodeNumber(sync)}`;
     return h(
       'li',
@@ -48,6 +52,21 @@ export function renderRecentSyncs({ syncs, pendingKeys, busyKey, error, onCorrec
         isBusy && icon('spinner', 'h-3 w-3 motion-safe:animate-spin'),
         isPending ? 'À vérifier ↑' : 'Corriger',
       ),
+      excluded
+        ? h(
+            'span',
+            { class: 'inline-flex h-[18px] shrink-0 items-center rounded-full border border-line px-2 text-[11px] font-bold text-muted', attrs: { title: 'Série exclue de la synchronisation' } },
+            'Exclue',
+          )
+        : h(
+            'button',
+            {
+              class: 'flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted transition-colors hover:bg-raised hover:text-danger',
+              attrs: { type: 'button', 'aria-label': `Ne plus synchroniser ${sync.episode.animeTitle}`, title: 'Ne plus synchroniser cette série', 'data-focus': `exclude-${sync.key}` },
+              on: { click: () => onExclude(sync) },
+            },
+            icon('ban', 'h-3.5 w-3.5'),
+          ),
     );
   });
 

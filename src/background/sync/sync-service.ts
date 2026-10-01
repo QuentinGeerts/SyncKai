@@ -1,6 +1,7 @@
 import type { AniListErrorCode } from '../../shared/anilist.types';
 import { flashSyncBadge, refreshReviewBadge } from '../../shared/badge';
 import type { EpisodeInfo } from '../../shared/episode.types';
+import { isExcluded, platformSeriesKey } from '../../shared/exclusions';
 import type { ResolveReviewPayload } from '../../shared/messages';
 import type { Result } from '../../shared/result';
 import type { CandidateSummary, PendingReview } from '../../shared/review.types';
@@ -34,7 +35,7 @@ const SKIP_REASONS = {
 function toErrorOutcome(error: unknown): SyncOutcome {
   if (error instanceof ApiError) {
     console.error(LOG_PREFIX, error.code, error.message);
-    return { status: 'error', message: error.message };
+    return { status: 'error', message: error.message, code: error.code };
   }
   console.error(LOG_PREFIX, 'Erreur inattendue :', error);
   return { status: 'error', message: 'Erreur inattendue pendant la synchronisation.' };
@@ -52,7 +53,7 @@ async function queueReview(review: PendingReview): Promise<void> {
 }
 
 /** Fiche du catalogue AniList (titre, nombre d'épisodes, identifiant MAL) : aucun compte requis. */
-async function getCatalogMedia(mediaId: number): Promise<CatalogMedia> {
+export async function getCatalogMedia(mediaId: number): Promise<CatalogMedia> {
   const media = await getAnimeById(mediaId);
   return { mediaId, idMal: media.idMal, title: media.displayTitle, episodes: media.episodes };
 }
@@ -96,7 +97,10 @@ async function writeToService(
     return { service: tracker.id, outcome: { status: 'updated', progress: saved.progress, completed: saved.status === 'COMPLETED' } };
   } catch (error: unknown) {
     console.error(LOG_PREFIX, `${label} : échec`, error);
-    return { service: tracker.id, outcome: { status: 'error', message: error instanceof ApiError ? error.message : 'Erreur inattendue.' } };
+    return {
+      service: tracker.id,
+      outcome: error instanceof ApiError ? { status: 'error', message: error.message, code: error.code } : { status: 'error', message: 'Erreur inattendue.' },
+    };
   }
 }
 
@@ -142,10 +146,20 @@ async function writeToServices(
 export async function syncEpisode(episode: EpisodeInfo, only: readonly TrackerId[] | null = null): Promise<SyncOutcome> {
   try {
     if ((await getConnectedTrackers(only)).length === 0) return { status: 'not-connected' };
+    // Série exclue côté plateforme (filet de sécurité : le content script vérifie déjà avant l'envoi)
+    if (await isExcluded({ platformKey: platformSeriesKey(episode) })) {
+      console.info(LOG_PREFIX, 'Série exclue (plateforme) : rien n’est écrit', episode);
+      return { status: 'excluded', mediaTitle: episode.animeTitle };
+    }
     const key = mappingKey(episode);
     const { result, candidates } = await resolveEpisode(episode);
 
     if (!result.ok || result.target.confidence === 'low') {
+      // Fiche suggérée exclue : pas de carte de vérification pour une série que l'utilisateur ignore
+      if (result.ok && (await isExcluded({ mediaId: result.target.mediaId }))) {
+        console.info(LOG_PREFIX, `Fiche suggérée ${result.target.mediaId} exclue : aucune vérification créée`);
+        return { status: 'excluded', mediaTitle: episode.animeTitle };
+      }
       const reason = result.ok ? result.target.reason : result.reason;
       console.warn(LOG_PREFIX, 'Correspondance incertaine :', reason, episode);
       await queueReview({
@@ -162,7 +176,12 @@ export async function syncEpisode(episode: EpisodeInfo, only: readonly TrackerId
 
     const { target } = result;
     console.info(LOG_PREFIX, `Fiche ${target.mediaId}, progression ${target.progress} : ${target.reason}`);
-    return await writeToServices(key, episode, await getCatalogMedia(target.mediaId), target.progress, { only });
+    const catalog = await getCatalogMedia(target.mediaId);
+    if (await isExcluded({ mediaId: target.mediaId })) {
+      console.info(LOG_PREFIX, `Fiche ${target.mediaId} exclue : rien n’est écrit`);
+      return { status: 'excluded', mediaTitle: catalog.title };
+    }
+    return await writeToServices(key, episode, catalog, target.progress, { only });
   } catch (error: unknown) {
     return toErrorOutcome(error);
   }

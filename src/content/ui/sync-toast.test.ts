@@ -54,3 +54,20 @@ describe('pillForOutcome', () => {
     expect(pillForOutcome(outcome)).toEqual({ tone: 'success', title: 'Ép. 7 déjà à jour', message: 'Frieren' });
   });
 });
+
+describe('toastForOutcome — série exclue', () => {
+  const excluded: SyncOutcome = { status: 'excluded', mediaTitle: 'One Piece' };
+
+  it('rien en discret (même hors plein écran) ni en alertes seulement', () => {
+    expect(toastForOutcome(excluded, 'discreet', false)).toBeNull();
+    expect(toastForOutcome(excluded, 'alerts-only', false)).toBeNull();
+  });
+
+  it('bulle d’information en mode détaillé', () => {
+    expect(toastForOutcome(excluded, 'detailed', true)).toEqual({
+      content: { tone: 'info', title: 'One Piece', message: 'Série exclue de la synchronisation.' },
+      variant: 'bubble',
+      autoHideMs: SUCCESS_TOAST_MS,
+    });
+  });
+});

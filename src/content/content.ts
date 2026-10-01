@@ -1,3 +1,4 @@
+import { isContentMessage } from '../shared/content-messages';
 import type { StreamingAdapter } from './adapters/adapter';
 import { adnAdapter } from './adapters/adn';
 import { crunchyrollAdapter } from './adapters/crunchyroll';
@@ -28,6 +29,17 @@ function main(): void {
     session?.destroy();
     session = episodeId ? startWatchSession(adapter, episodeId) : null;
   };
+
+  // Un seul écouteur pour toute la vie de la page, routé vers la session courante
+  chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse): void => {
+    if (sender.id !== chrome.runtime.id || !isContentMessage(message)) return;
+    sendResponse(); // Accusé de réception : le service worker n'attend rien de plus
+    if (!session) {
+      log.info('Raccourci « valider l’épisode » ignoré : aucune lecture en cours');
+      return;
+    }
+    session.forceComplete();
+  });
 
   handleUrl(new URL(location.href));
   watchUrl(handleUrl);

@@ -17,6 +17,12 @@ const ICON_PATHS = {
   chevronRight: ['M9 6l6 6-6 6'],
   sortNext: ['M7 4v16', 'M3 16l4 4 4-4', 'M14 6h7', 'M14 12h5', 'M14 18h3'],
   screen: ['M5 4h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z', 'M8 21h8'],
+  // Points de suspension : segments nuls rendus en disques par stroke-linecap="round"
+  more: ['M5 12h.01', 'M12 12h.01', 'M19 12h.01'],
+  ban: ['M22 12a10 10 0 1 1-20 0a10 10 0 1 1 20 0', 'm4.9 4.9 14.2 14.2'],
+  minus: ['M5 12h14'],
+  retry: ['M3 12a9 9 0 1 0 3-6.7L3 8', 'M3 3v5h5'],
+  clock: ['M22 12a10 10 0 1 1-20 0a10 10 0 1 1 20 0', 'M12 7v5l3 2'],
 } as const;
 
 export type IconName = keyof typeof ICON_PATHS;

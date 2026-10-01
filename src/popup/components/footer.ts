@@ -6,6 +6,9 @@ import { serviceAvatar } from './ui';
 export type FooterStatus =
   | { kind: 'none' }
   | { kind: 'pending'; count: number }
+  /** Synchros de la file : abandonnées (à traiter) ou en attente de relance automatique */
+  | { kind: 'queue-failed'; count: number }
+  | { kind: 'queue-pending'; count: number }
   | { kind: 'expired'; service: TrackerId }
   | { kind: 'ok'; relative: string | null };
 
@@ -42,6 +45,25 @@ function renderStatus({ status, onOpenActivity, onReconnect }: FooterProps): HTM
             on: { click: onOpenActivity },
           },
           warnIcon('h-3.5 w-3.5 text-butter'),
+          h('span', { class: 'truncate' }, label),
+        ),
+      );
+    }
+    case 'queue-failed':
+    case 'queue-pending': {
+      const failed = status.kind === 'queue-failed';
+      const label = `${status.count} synchro${status.count > 1 ? 's' : ''} ${failed ? 'en échec' : 'en attente'}`;
+      return h(
+        'div',
+        { class: box, attrs: { role: 'status' } },
+        h(
+          'button',
+          {
+            class: `flex h-8 min-w-0 cursor-pointer items-center gap-1 rounded-full px-2 transition-colors hover:bg-raised ${failed ? 'text-danger' : 'text-lavender'}`,
+            attrs: { type: 'button', 'aria-label': `${label} — voir l’activité`, 'data-focus': 'footer-queue' },
+            on: { click: onOpenActivity },
+          },
+          icon(failed ? 'alert' : 'clock', 'h-3.5 w-3.5'),
           h('span', { class: 'truncate' }, label),
         ),
       );

@@ -4,11 +4,25 @@ import { choosePlatformLink, formatRelativeTime, nextEpisodeBadge, pickHeroEntry
 import { WATCHING_SORTS, type NextEpisodeBadge, type WatchingEntry, type WatchingSort } from '../../shared/watching.types';
 import { h, nodes } from '../../ui/dom';
 import { icon, mochi, playIcon, sparkIcon } from '../../ui/icons';
-import type { WatchingState } from '../state';
+import { TONE_CHIP } from '../feedback';
+import type { EntryAction, WatchingState } from '../state';
 import { renderAlert } from './alert';
 import { CARD, kanaLabel, PLATFORM_LABELS, platformChip, renderCover, sectionTitle, segmented } from './ui';
 
+/** Actions par série (+1, menu « … ») : état fourni par le popup, il survit aux nouveaux rendus */
+export interface EntryControls {
+  actions: ReadonlyMap<string, EntryAction>;
+  /** Fiches AniList exclues de la synchronisation */
+  excludedMediaIds: ReadonlySet<number>;
+  rowMenu: string | null;
+  onRowMenu: (key: string | null) => void;
+  onAdjust: (entry: WatchingEntry, delta: 1 | -1) => void;
+  onExclude: (entry: WatchingEntry) => void;
+  onInclude: (entry: WatchingEntry) => void;
+}
+
 interface WatchingScreenProps {
+  controls: EntryControls;
   state: WatchingState;
   now: number;
   preferredPlayer: StreamingPlatform;
@@ -49,6 +63,154 @@ function displayPlatform(entry: WatchingEntry, preferred: StreamingPlatform): St
   return choosePlatformLink(entry, preferred)?.platform ?? entry.lastSync?.platform ?? null;
 }
 
+/** Clé stable d'une série de la liste (une fiche MAL peut ne pas avoir d'identifiant AniList) */
+export function entryKey(entry: WatchingEntry): string {
+  return `${entry.mediaId ?? '-'}:${entry.malId ?? '-'}`;
+}
+
+function isExcludedEntry(entry: WatchingEntry, controls: EntryControls): boolean {
+  return entry.mediaId !== null && controls.excludedMediaIds.has(entry.mediaId);
+}
+
+const ICON_BTN =
+  'flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full transition hover:brightness-125 disabled:cursor-default disabled:opacity-60 disabled:hover:brightness-100';
+
+/** « +1 » : marque l'épisode suivant comme vu (spinner pendant l'envoi) */
+function renderPlusOne(entry: WatchingEntry, controls: EntryControls, bgClass: string): HTMLElement {
+  const pending = controls.actions.get(entryKey(entry))?.phase === 'pending';
+  const atEnd = entry.totalEpisodes !== null && entry.progress >= entry.totalEpisodes;
+  return h(
+    'button',
+    {
+      class: `${ICON_BTN} ${bgClass} text-[12px] font-extrabold text-mint tabular-nums`,
+      attrs: {
+        type: 'button',
+        'aria-label': `Marquer l’épisode suivant comme vu : ${entry.title}`,
+        title: atEnd ? 'Tous les épisodes sont déjà vus' : 'Épisode suivant vu',
+        'data-focus': `plus-${entryKey(entry)}`,
+        ...(pending ? { 'aria-busy': 'true' } : {}),
+        ...(pending || atEnd ? { disabled: '' } : {}),
+      },
+      on: { click: () => controls.onAdjust(entry, 1) },
+    },
+    pending ? icon('spinner', 'h-3.5 w-3.5 motion-safe:animate-spin') : '+1',
+  );
+}
+
+const MENU_ITEM =
+  'flex min-h-8 w-full cursor-pointer items-center gap-2 rounded-lg px-2 text-left text-[12px] font-semibold text-ink no-underline transition-colors hover:bg-raised focus-visible:bg-raised disabled:cursor-default disabled:text-muted disabled:opacity-60 disabled:hover:bg-transparent';
+
+function rowMenuId(key: string): string {
+  return `sk-row-menu-${key.replace(/[^\w-]/g, '_')}`;
+}
+
+/** Menu « … » d'une série : −1, exclusion / réactivation, fiche du service */
+function renderRowMenu(entry: WatchingEntry, controls: EntryControls): HTMLElement {
+  const key = entryKey(entry);
+  const pending = controls.actions.get(key)?.phase === 'pending';
+  const excluded = isExcludedEntry(entry, controls);
+  const close = (): void => controls.onRowMenu(null);
+  const item = (focus: string, label: string, iconEl: SVGSVGElement, onClick: () => void, disabled = false, danger = false): HTMLElement =>
+    h(
+      'button',
+      {
+        class: `${MENU_ITEM} ${danger ? 'text-danger' : ''}`,
+        attrs: { type: 'button', role: 'menuitem', tabindex: '-1', 'data-focus': `${focus}-${key}`, ...(disabled ? { disabled: '' } : {}) },
+        on: { click: onClick },
+      },
+      iconEl,
+      label,
+    );
+
+  const menu: HTMLElement = h(
+    'div',
+    {
+      class: 'absolute top-full right-0 z-30 mt-1 flex w-max max-w-[240px] min-w-[200px] flex-col gap-0.5 rounded-card border border-line bg-surface p-1 shadow-pop',
+      attrs: { id: rowMenuId(key), role: 'menu', 'aria-label': `Actions : ${entry.title}` },
+      on: { keydown: (event) => onMenuKeyDown(menu, event, close) },
+    },
+    item('minus', '−1 épisode', icon('minus', 'h-3.5 w-3.5 text-muted', '2.6'), () => {
+      close();
+      controls.onAdjust(entry, -1);
+    }, pending || entry.progress <= 0),
+    excluded
+      ? item('include', 'Réactiver la synchro', icon('retry', 'h-3.5 w-3.5 text-mint'), () => {
+          close();
+          controls.onInclude(entry);
+        })
+      : item('exclude', 'Ne plus synchroniser cette série', icon('ban', 'h-3.5 w-3.5'), () => {
+          close();
+          controls.onExclude(entry);
+        }, entry.mediaId === null, true),
+    h(
+      'a',
+      {
+        class: MENU_ITEM,
+        attrs: { href: entry.siteUrl, target: '_blank', rel: 'noopener noreferrer', role: 'menuitem', tabindex: '-1', 'data-focus': `site-${key}` },
+        on: { click: close },
+      },
+      icon('external', 'h-3.5 w-3.5 text-muted'),
+      'Ouvrir la fiche',
+    ),
+  );
+  return menu;
+}
+
+/** Bouton « … » + menu ; un seul menu ouvert à la fois (clé dans l'état du popup) */
+function renderRowMenuControl(entry: WatchingEntry, controls: EntryControls, bgClass: string): HTMLElement {
+  const key = entryKey(entry);
+  const open = controls.rowMenu === key;
+  const trigger = h(
+    'button',
+    {
+      class: `${ICON_BTN} ${bgClass} ${open ? 'text-ink' : 'text-muted'}`,
+      attrs: {
+        type: 'button',
+        'aria-haspopup': 'menu',
+        'aria-expanded': String(open),
+        'aria-controls': rowMenuId(key),
+        'aria-label': `Plus d’actions : ${entry.title}`,
+        'data-focus': `more-${key}`,
+      },
+      on: {
+        click: () => controls.onRowMenu(open ? null : key),
+        keydown: (event) => {
+          if (!open && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+            event.preventDefault();
+            controls.onRowMenu(key);
+          }
+        },
+      },
+    },
+    icon('more', 'h-4 w-4', '3.2'),
+  );
+  return h('div', { class: 'relative shrink-0', attrs: { 'data-menu-root': key } }, ...nodes([trigger, open && renderRowMenu(entry, controls)]));
+}
+
+/** Pastille de retour d'action (remplace brièvement la pastille d'état) */
+function feedbackChip(controls: EntryControls, entry: WatchingEntry): HTMLElement | null {
+  const action = controls.actions.get(entryKey(entry));
+  if (action?.phase !== 'done') return null;
+  const { feedback } = action;
+  return h(
+    'span',
+    {
+      class: `inline-block h-[18px] min-w-0 max-w-full truncate rounded-full border px-2 text-[11px] leading-4 font-bold whitespace-nowrap ${TONE_CHIP[feedback.tone]}`,
+      attrs: { role: 'status', title: feedback.detail },
+    },
+    feedback.text,
+  );
+}
+
+function excludedChip(): HTMLElement {
+  return h(
+    'span',
+    { class: 'inline-flex h-[18px] shrink-0 items-center gap-1 rounded-full border border-line px-2 text-[11px] leading-4 font-bold text-muted', attrs: { title: 'Série exclue de la synchronisation' } },
+    icon('ban', 'h-2.5 w-2.5', '2.6'),
+    'Exclue',
+  );
+}
+
 /** Étincelle posée au bout de la barre de progression */
 function spark(pct: number): SVGSVGElement {
   const el = sparkIcon('absolute -top-[3px] -ml-[7px] h-3.5 w-3.5');
@@ -58,7 +220,9 @@ function spark(pct: number): SVGSVGElement {
 
 // ─── Carte « Reprendre » ──────────────────────────────────────────────────
 
-function renderHero(entry: WatchingEntry, now: number, preferred: StreamingPlatform): HTMLElement {
+function renderHero(entry: WatchingEntry, now: number, preferred: StreamingPlatform, controls: EntryControls): HTMLElement {
+  const excluded = isExcludedEntry(entry, controls);
+  const feedback = feedbackChip(controls, entry);
   const link = choosePlatformLink(entry, preferred);
   const platform = displayPlatform(entry, preferred);
   const pct = progressPercent(entry);
@@ -109,10 +273,20 @@ function renderHero(entry: WatchingEntry, now: number, preferred: StreamingPlatf
           : h('div', { class: 'contents' }, h('div', { class: 'h-2 rounded-full bg-sakura', attrs: { style: `width: ${pct}%` } }), spark(pct)),
       ),
       h(
-        'span',
-        { class: 'mt-0.5 truncate text-[11px] font-semibold text-muted' },
-        h('span', { class: 'font-bold text-ink tabular-nums' }, entry.totalEpisodes !== null ? `Ép. ${entry.progress} / ${entry.totalEpisodes}` : `Ép. ${entry.progress}`),
-        meta.length > 0 && ` · ${meta.join(' · ')}`,
+        'div',
+        { class: 'flex items-center gap-1.5' },
+        // Retour d'action prioritaire sur la ligne d'infos, le temps de l'afficher
+        feedback ??
+          h(
+            'span',
+            { class: 'min-w-0 flex-1 truncate text-[11px] font-semibold text-muted' },
+            h('span', { class: 'font-bold text-ink tabular-nums' }, entry.totalEpisodes !== null ? `Ép. ${entry.progress} / ${entry.totalEpisodes}` : `Ép. ${entry.progress}`),
+            meta.length > 0 && ` · ${meta.join(' · ')}`,
+          ),
+        feedback && h('span', { class: 'flex-1' }),
+        excluded && excludedChip(),
+        !excluded && renderPlusOne(entry, controls, 'bg-surface'),
+        renderRowMenuControl(entry, controls, 'bg-surface'),
       ),
     ),
   );
@@ -120,24 +294,32 @@ function renderHero(entry: WatchingEntry, now: number, preferred: StreamingPlatf
 
 // ─── Lignes « Mes séries » ────────────────────────────────────────────────
 
-function renderRow(entry: WatchingEntry, now: number, preferred: StreamingPlatform): HTMLElement {
+function renderRow(entry: WatchingEntry, now: number, preferred: StreamingPlatform, controls: EntryControls): HTMLElement {
   const badge = nextEpisodeBadge(entry, now);
   const link = choosePlatformLink(entry, preferred);
   const platform = displayPlatform(entry, preferred);
   const pct = progressPercent(entry);
+  const excluded = isExcludedEntry(entry, controls);
 
+  // Pas d'overflow-hidden sur la ligne : le menu « … » doit pouvoir déborder (la barre est rognée par son propre calque)
   return h(
     'li',
-    { class: 'relative flex h-16 items-center gap-3 overflow-hidden rounded-lg bg-surface px-2' },
+    { class: 'relative flex h-16 items-center gap-2 rounded-lg bg-surface px-2' },
     renderCover(entry.title, entry.coverUrl, 'h-11 w-8', 'text-[11px]', platform && platformChip(platform, '-right-[3px] -bottom-[3px]')),
     h(
       'div',
-      { class: 'flex min-w-0 flex-1 flex-col items-start gap-1' },
+      { class: 'ml-1 flex min-w-0 flex-1 flex-col items-start gap-1' },
       h('span', { class: 'max-w-full truncate text-[13px] leading-[17px] font-bold', attrs: { title: entry.title } }, entry.title),
       h(
         'span',
-        { class: `inline-flex h-[18px] items-center rounded-full border px-2 text-[11px] leading-4 font-bold whitespace-nowrap ${BADGE_CLASSES[badge.kind]}` },
-        badge.label,
+        { class: 'flex max-w-full min-w-0 items-center gap-1' },
+        feedbackChip(controls, entry) ??
+          h(
+            'span',
+            { class: `inline-flex h-[18px] items-center rounded-full border px-2 text-[11px] leading-4 font-bold whitespace-nowrap ${BADGE_CLASSES[badge.kind]}` },
+            badge.label,
+          ),
+        excluded && excludedChip(),
       ),
     ),
     h(
@@ -160,12 +342,18 @@ function renderRow(entry: WatchingEntry, now: number, preferred: StreamingPlatfo
         },
         icon('screen', 'h-4 w-4'),
       ),
+    !excluded && renderPlusOne(entry, controls, 'bg-raised'),
+    renderRowMenuControl(entry, controls, 'bg-raised'),
     h(
       'div',
-      { class: 'absolute inset-x-0 bottom-0 h-[3px] bg-raised', attrs: { 'aria-hidden': 'true' } },
-      pct === null
-        ? h('div', { class: 'h-[3px] w-full bg-[repeating-linear-gradient(45deg,var(--color-lavender)_0_4px,transparent_4px_8px)]' })
-        : h('div', { class: 'h-[3px] bg-sakura', attrs: { style: `width: ${pct}%` } }),
+      { class: 'pointer-events-none absolute inset-0 overflow-hidden rounded-lg', attrs: { 'aria-hidden': 'true' } },
+      h(
+        'div',
+        { class: 'absolute inset-x-0 bottom-0 h-[3px] bg-raised' },
+        pct === null
+          ? h('div', { class: 'h-[3px] w-full bg-[repeating-linear-gradient(45deg,var(--color-lavender)_0_4px,transparent_4px_8px)]' })
+          : h('div', { class: 'h-[3px] bg-sakura', attrs: { style: `width: ${pct}%` } }),
+      ),
     ),
   );
 }
@@ -192,11 +380,22 @@ const MENU_NAV_KEYS: ReadonlySet<string> = new Set(['ArrowDown', 'ArrowUp', 'Hom
 
 /** Déplace le focus clavier entre les options du menu (flèches en boucle, Début, Fin) */
 function moveMenuFocus(menu: HTMLElement, key: string): void {
-  const items = [...menu.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')];
+  const items = [...menu.querySelectorAll<HTMLElement>('[role^="menuitem"]:not(:disabled)')];
   const index = items.findIndex((item) => item === document.activeElement);
   const last = items.length - 1;
   const next = key === 'Home' ? 0 : key === 'End' ? last : key === 'ArrowDown' ? (index >= last ? 0 : index + 1) : index <= 0 ? last : index - 1;
   items[next]?.focus();
+}
+
+/** Clavier d'un menu : flèches / Début / Fin entre les options, Tab ferme (focus rendu au bouton) */
+function onMenuKeyDown(menu: HTMLElement, event: KeyboardEvent, onClose: () => void): void {
+  if (MENU_NAV_KEYS.has(event.key)) {
+    event.preventDefault();
+    moveMenuFocus(menu, event.key);
+  } else if (event.key === 'Tab') {
+    event.preventDefault();
+    onClose();
+  }
 }
 
 function renderSortMenu(sort: WatchingSort, onClose: () => void, onPick: (sort: WatchingSort) => void): HTMLElement {
@@ -205,18 +404,7 @@ function renderSortMenu(sort: WatchingSort, onClose: () => void, onPick: (sort: 
     {
       class: 'absolute top-full right-0 z-30 mt-1 flex w-max max-w-[200px] min-w-[176px] flex-col gap-0.5 rounded-card border border-line bg-surface p-1 shadow-pop',
       attrs: { id: SORT_MENU_ID, role: 'menu', 'aria-label': 'Trier mes séries' },
-      on: {
-        keydown: (event) => {
-          if (MENU_NAV_KEYS.has(event.key)) {
-            event.preventDefault();
-            moveMenuFocus(menu, event.key);
-          } else if (event.key === 'Tab') {
-            // Tab quitte le menu : fermeture, focus rendu au bouton de tri
-            event.preventDefault();
-            onClose();
-          }
-        },
-      },
+      on: { keydown: (event) => onMenuKeyDown(menu, event, onClose) },
     },
     ...WATCHING_SORTS.map((value) => {
       const checked = value === sort;
@@ -363,7 +551,7 @@ export function renderWatchingScreen(props: WatchingScreenProps): HTMLElement {
     { class: 'flex flex-col gap-3', attrs: { 'aria-busy': String(state.refreshing) } },
     ...nodes([
       errorAlert,
-      hero && renderHero(hero, now, preferredPlayer),
+      hero && renderHero(hero, now, preferredPlayer, props.controls),
       h(
         'div',
         { class: 'flex shrink-0 items-center justify-between gap-2' },
@@ -381,7 +569,7 @@ export function renderWatchingScreen(props: WatchingScreenProps): HTMLElement {
               class: 'm-0 flex list-none flex-col gap-1 p-0',
               attrs: { 'aria-label': `Mes séries ${TRACKER_LABELS[state.service]}, triées ${SORT_ARIA[props.sort]}` },
             },
-            ...rows.map((entry) => renderRow(entry, now, preferredPlayer)),
+            ...rows.map((entry) => renderRow(entry, now, preferredPlayer, props.controls)),
           )
         : h('p', { class: `${CARD} m-0 p-3 text-[12px] text-muted` }, 'Aucune autre série en cours.'),
     ]),

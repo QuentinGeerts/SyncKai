@@ -1,5 +1,6 @@
 import type { AniListViewer } from '../../shared/anilist.types';
 import type { StreamingPlatform } from '../../shared/episode.types';
+import { includeSeries, type ExcludedSeries } from '../../shared/exclusions';
 import type { MalViewer } from '../../shared/mal.types';
 import { normalizeSettings, PERCENTAGE_RANGE, saveSettings, type NotificationLevel, type SyncSettings } from '../../shared/settings';
 import { clearMediaMappings, deleteMediaMapping, getMediaMappings } from '../../shared/storage';
@@ -7,7 +8,7 @@ import type { MediaMapping } from '../../shared/sync.types';
 import { TRACKER_LABELS, type TrackerId } from '../../shared/tracker.types';
 import { h, nodes, preserveFocus, type Child } from '../../ui/dom';
 import { icon } from '../../ui/icons';
-import type { AccountState, SettingsState } from '../state';
+import type { AccountState, ExclusionsState, SettingsState } from '../state';
 import { renderAlert } from './alert';
 import { BTN_GHOST, CARD, LINK, sectionLabel, segmented, SERVICE_CHIPS, serviceAvatar } from './ui';
 
@@ -15,6 +16,13 @@ const REPO_URL = 'https://github.com/QuentinGeerts/SyncKai';
 const ISSUES_URL = 'https://github.com/QuentinGeerts/SyncKai/issues';
 const SAVED_BADGE_MS = 1_500;
 const DIVIDER = 'border-t border-dotted border-line';
+const COMMAND_NAME = 'complete-episode';
+const SHORTCUTS_URL = 'chrome://extensions/shortcuts';
+
+/** "Alt+Shift+S" → "Alt+Maj+S" (libellés de clavier français) */
+function formatShortcut(shortcut: string): string {
+  return shortcut.replace(/Shift/g, 'Maj');
+}
 
 export interface AccountsProps {
   anilist: AccountState<AniListViewer>;
@@ -31,6 +39,7 @@ export interface SettingsScreen {
   updateAccounts(props: AccountsProps): void;
   updateSettings(state: SettingsState): void;
   refreshMappings(): Promise<void>;
+  updateExclusions(state: ExclusionsState): void;
 }
 
 // ─── Contrôles ────────────────────────────────────────────────────────────
@@ -217,6 +226,13 @@ export function createSettingsScreen(): SettingsScreen {
 
   const version = chrome.runtime.getManifest().version;
 
+  /** Raccourci clavier « valider l'épisode » : undefined = en lecture, '' = non défini */
+  let shortcut: string | undefined;
+  const exclusionsCard = h('div', { class: `${CARD} overflow-hidden` });
+  let exclusions: ExclusionsState = { status: 'loading' };
+  let reactivatingId: string | null = null;
+  let exclusionsError: string | null = null;
+
   function showStatus(ok: boolean): void {
     clearTimeout(badgeTimer);
     status.className = `flex items-center gap-1 text-[11px] font-bold transition-opacity ${ok ? 'text-mint' : 'text-danger'}`;
@@ -369,6 +385,7 @@ export function createSettingsScreen(): SettingsScreen {
               s.completionTrigger === 'percentage' ? 'Appliqué à partir de l’épisode suivant' : 'Utilisé si la plateforme ne fournit pas le générique (ADN)',
             ),
           ),
+          renderShortcutHint(),
         ),
       ),
       h(
@@ -383,6 +400,96 @@ export function createSettingsScreen(): SettingsScreen {
         ),
       ),
     ];
+  }
+
+  function renderShortcutHint(): HTMLElement {
+    const text =
+      shortcut === undefined
+        ? 'Raccourci clavier…'
+        : shortcut
+          ? h('span', {}, 'Raccourci : ', h('kbd', { class: 'font-body font-bold text-ink' }, formatShortcut(shortcut)), ' pour valider l’épisode en cours')
+          : 'Aucun raccourci défini pour valider l’épisode en cours';
+    return h(
+      'div',
+      { class: `flex items-center justify-between gap-2 pt-2 ${DIVIDER}` },
+      h('span', { class: 'min-w-0 text-[11px] font-semibold text-muted' }, text),
+      h(
+        'button',
+        {
+          class: `${LINK} inline-flex min-h-8 shrink-0 cursor-pointer items-center bg-transparent px-1 text-[12px] font-bold`,
+          attrs: { type: 'button', 'aria-label': 'Modifier le raccourci clavier (page des raccourcis de Chrome)', 'data-focus': 'shortcut' },
+          // Les pages chrome:// ne s'ouvrent pas via un lien : passage par l'API tabs
+          on: { click: () => void chrome.tabs.create({ url: SHORTCUTS_URL }) },
+        },
+        shortcut ? 'Modifier' : 'Définir',
+      ),
+    );
+  }
+
+  async function loadShortcut(): Promise<void> {
+    try {
+      const commands = await chrome.commands.getAll();
+      shortcut = commands.find((c) => c.name === COMMAND_NAME)?.shortcut ?? '';
+    } catch (error: unknown) {
+      console.warn('[SyncKai] Lecture du raccourci impossible :', error);
+      shortcut = '';
+    }
+    drawForm();
+  }
+
+  // ─── Séries exclues ─────────────────────────────────────────────────────
+
+  function drawExclusions(): void {
+    preserveFocus(exclusionsCard, () => exclusionsCard.replaceChildren(...nodes(renderExclusions())));
+  }
+
+  function renderExclusionRow(item: ExcludedSeries, first: boolean): HTMLElement {
+    const busy = reactivatingId === item.id;
+    return h(
+      'li',
+      { class: `flex min-h-11 items-center gap-2 ${first ? '' : DIVIDER}` },
+      icon('ban', 'h-3.5 w-3.5 text-muted'),
+      h('span', { class: 'min-w-0 flex-1 truncate text-[12px] font-bold', attrs: { title: item.label } }, item.label),
+      h(
+        'button',
+        {
+          class: `${BTN_GHOST} text-sakura`,
+          attrs: { type: 'button', 'aria-label': `Réactiver la synchro de ${item.label}`, 'data-focus': `include-${item.id}`, ...(reactivatingId !== null ? { disabled: '' } : {}) },
+          on: { click: () => void reactivate(item.id) },
+        },
+        busy && icon('spinner', 'h-3 w-3 motion-safe:animate-spin'),
+        'Réactiver',
+      ),
+    );
+  }
+
+  function renderExclusions(): Child[] {
+    if (exclusions.status === 'loading') {
+      return [h('div', { class: 'm-3 h-5 rounded bg-raised motion-safe:animate-pulse', attrs: { 'aria-busy': 'true', 'aria-label': 'Chargement des séries exclues' } })];
+    }
+    if (exclusions.status === 'error') return [h('div', { class: 'p-3' }, renderAlert({ message: 'Impossible de lire les séries exclues.' }))];
+    const { items } = exclusions;
+    return [
+      items.length > 0
+        ? h('ul', { class: 'm-0 list-none py-0 pr-1 pl-3' }, ...items.map((item, i) => renderExclusionRow(item, i === 0)))
+        : h('p', { class: 'm-0 flex min-h-11 items-center px-3 text-[12px] text-muted' }, 'Aucune série exclue.'),
+      exclusionsError && h('div', { class: 'px-3 pb-3' }, renderAlert({ message: exclusionsError })),
+    ];
+  }
+
+  async function reactivate(id: string): Promise<void> {
+    reactivatingId = id;
+    exclusionsError = null;
+    drawExclusions();
+    try {
+      // La liste est relue par le popup via storage.onChanged
+      await includeSeries(id);
+    } catch (error: unknown) {
+      console.error('[SyncKai] Réactivation de la série impossible :', error);
+      exclusionsError = 'La série n’a pas pu être réactivée. Réessaie.';
+    }
+    reactivatingId = null;
+    drawExclusions();
   }
 
   function drawMappings(): void {
@@ -543,6 +650,7 @@ export function createSettingsScreen(): SettingsScreen {
     h('section', { class: 'flex flex-col gap-2' }, sectionLabel('Comptes'), accountsCard),
     formSlot,
     h('section', { class: 'flex flex-col gap-2' }, sectionLabel('Correspondances'), mappingsCard),
+    h('section', { class: 'flex flex-col gap-2' }, sectionLabel('Séries exclues'), exclusionsCard),
     h(
       'section',
       { class: 'flex flex-col gap-2' },
@@ -568,6 +676,8 @@ export function createSettingsScreen(): SettingsScreen {
 
   drawForm();
   drawMappings();
+  drawExclusions();
+  void loadShortcut();
 
   return {
     element,
@@ -591,5 +701,9 @@ export function createSettingsScreen(): SettingsScreen {
       drawForm();
     },
     refreshMappings,
+    updateExclusions(state) {
+      exclusions = state;
+      drawExclusions();
+    },
   };
 }
