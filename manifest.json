@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SyncKai",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Synchronise automatiquement tes animes (Crunchyroll, ADN) vers AniList et MyAnimeList.",
   "minimum_chrome_version": "116",
   "icons": {
