@@ -4,6 +4,9 @@ import { isRecord } from '../../shared/guards';
 import { clearAniListSession, getValidToken } from '../../shared/storage';
 import { ApiError } from './errors';
 import { retryDelayMs, sleep } from './rate-limit';
+import { createLogger } from '../../shared/logger';
+
+const log = createLogger('anilist');
 
 const ANILIST_GRAPHQL_URL = 'https://graphql.anilist.co';
 
@@ -61,7 +64,7 @@ async function request<T>(
     // Une seule nouvelle tentative, si AniList demande une attente courte (requête non traitée : sans risque)
     const delay = isRetry ? null : retryDelayMs(response.headers.get('Retry-After'));
     if (delay !== null) {
-      console.warn(`[SyncKai] Limite de requêtes AniList atteinte, nouvelle tentative dans ${Math.ceil(delay / 1000)} s`);
+      log.warn(`Limite de requêtes AniList atteinte, nouvelle tentative dans ${Math.ceil(delay / 1000)} s`);
       await sleep(delay);
       return request(query, isData, variables, auth, true);
     }
@@ -69,13 +72,13 @@ async function request<T>(
   }
 
   if (!response.ok || errors.length > 0) {
-    console.error('[SyncKai] Erreur API AniList :', response.status, errors);
+    log.error('Erreur API AniList :', response.status, errors);
     throw new ApiError('API_ERROR', t('api.httpError', { service: 'AniList', status: response.status }));
   }
 
   const data: unknown = isRecord(body) ? body.data : undefined;
   if (!isData(data)) {
-    console.error('[SyncKai] Réponse AniList inattendue :', body);
+    log.error('Réponse AniList inattendue :', body);
     throw new ApiError('INVALID_RESPONSE', t('api.invalidResponse.anilist'));
   }
   return data;

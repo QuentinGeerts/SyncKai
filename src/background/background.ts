@@ -20,10 +20,13 @@ import {
   type MessageType,
   type RuntimeMessage,
 } from '../shared/messages';
+import { createLogger } from '../shared/logger';
+
+const log = createLogger('background');
 
 chrome.runtime.onInstalled.addListener((): void => {
-  console.log('SyncKai installé et prêt');
-  console.log('Redirect URL OAuth :', chrome.identity.getRedirectURL());
+  log.info('SyncKai installé et prêt');
+  log.info('Redirect URL OAuth :', chrome.identity.getRedirectURL());
   void refreshReviewBadge();
 });
 
@@ -33,7 +36,7 @@ chrome.runtime.onStartup.addListener((): void => {
 });
 
 // Langue de l'interface (messages d'erreur, notifications) : lue au réveil, attendue avant chaque traitement
-const i18nReady = initI18n().catch((error: unknown) => console.warn('[SyncKai] Langue des réglages illisible :', error));
+const i18nReady = initI18n().catch((error: unknown) => log.warn('Langue des réglages illisible :', error));
 
 /** Exécute `run` une fois la langue chargée */
 function afterI18n(run: () => unknown): void {
@@ -119,7 +122,7 @@ chrome.runtime.onMessage.addListener(
     if (sender.id !== chrome.runtime.id || !isRuntimeMessage(message)) return false;
     // Les actions sur le compte ne viennent que du popup : un content script (sender.tab) est refusé
     if (EXTENSION_PAGE_ONLY.has(message.type) && sender.tab !== undefined) {
-      console.warn('[SyncKai] Message refusé depuis un onglet :', message.type);
+      log.warn('Message refusé depuis un onglet :', message.type);
       return false;
     }
 
@@ -127,7 +130,7 @@ chrome.runtime.onMessage.addListener(
       .then(() => dispatch(message, sender))
       .then(sendResponse)
       .catch((error: unknown) => {
-        console.error('[SyncKai] Erreur non gérée pour', message.type, error);
+        log.error('Erreur non gérée pour', message.type, error);
         sendResponse(unexpectedErrors()[message.type]);
       });
     return true; // Garde le canal ouvert pour la réponse asynchrone

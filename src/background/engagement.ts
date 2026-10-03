@@ -9,10 +9,11 @@ import { TRACKER_LABELS } from '../shared/tracker.types';
 import { ApiError } from './api/errors';
 import { getConnectedTrackers } from './trackers';
 import type { TrackerEntry, TrackerService } from './trackers/tracker';
+import { createLogger } from '../shared/logger';
 
 // Engagement (service worker) : note de fin de série et revisionnage, sur tous les services connectés.
 
-const LOG_PREFIX = '[SyncKai:engagement]';
+const log = createLogger('engagement');
 
 interface Target {
   tracker: TrackerService;
@@ -35,7 +36,7 @@ function toErrorOutcome(error: unknown): ServiceOutcome {
 
 function toSyncError(error: unknown, fallback: string): SyncOutcome {
   if (error instanceof ApiError) return { status: 'error', message: error.message, code: error.code };
-  console.error(LOG_PREFIX, 'Erreur inattendue :', error);
+  log.error('Erreur inattendue :', error);
   return { status: 'error', message: fallback };
 }
 
@@ -49,7 +50,7 @@ async function onService(
     if (typeof step === 'string') return { service: tracker.id, outcome: { status: 'skipped', reason: step } };
     return { service: tracker.id, outcome: await step() };
   } catch (error: unknown) {
-    console.error(LOG_PREFIX, `${TRACKER_LABELS[tracker.id]} : échec`, error);
+    log.error(`${TRACKER_LABELS[tracker.id]} : échec`, error);
     return { service: tracker.id, outcome: toErrorOutcome(error) };
   }
 }
@@ -68,7 +69,7 @@ export async function rateMedia(media: MediaRef, score: Score10): Promise<SyncOu
           if (current.entry === null) return t('engagement.notInList');
           return async () => {
             const saved = await target.tracker.saveScore(target.id, score);
-            console.info(LOG_PREFIX, `✔ ${TRACKER_LABELS[target.tracker.id]} : ${current.title} noté ${score}/10`);
+            log.info(`✔ ${TRACKER_LABELS[target.tracker.id]} : ${current.title} noté ${score}/10`);
             return { status: 'updated', progress: saved.progress, completed: saved.status === 'COMPLETED' };
           };
         }),
@@ -92,7 +93,7 @@ export async function deferRating(media: MediaRef, coverUrl: string | null): Pro
     await refreshReviewBadge();
     return { ok: true, data: null };
   } catch (error: unknown) {
-    console.error(LOG_PREFIX, 'Note en attente non enregistrée :', error);
+    log.error('Note en attente non enregistrée :', error);
     return { ok: false, code: 'API_ERROR', message: t('engagement.deferFailed') };
   }
 }
@@ -112,7 +113,7 @@ export async function startRewatch(media: MediaRef, progress: number): Promise<S
           if (current.episodes !== null && progress > current.episodes) return t('sync.beyondEntry', { progress, total: current.episodes });
           return async () => {
             const saved = await target.tracker.startRewatch(target.id, progress);
-            console.info(LOG_PREFIX, `✔ ${TRACKER_LABELS[target.tracker.id]} : revisionnage de ${current.title}, épisode ${saved.progress}`);
+            log.info(`✔ ${TRACKER_LABELS[target.tracker.id]} : revisionnage de ${current.title}, épisode ${saved.progress}`);
             return { status: 'updated', progress: saved.progress, completed: false };
           };
         }),
@@ -130,7 +131,7 @@ export async function declineRewatch(media: MediaRef): Promise<Result<null, AniL
     await recordRewatchDecline(media);
     return { ok: true, data: null };
   } catch (error: unknown) {
-    console.error(LOG_PREFIX, 'Refus de revisionnage non enregistré :', error);
+    log.error('Refus de revisionnage non enregistré :', error);
     return { ok: false, code: 'API_ERROR', message: t('engagement.declineFailed') };
   }
 }

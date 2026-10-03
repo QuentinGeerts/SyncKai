@@ -98,7 +98,8 @@ Section maintenue par Claude pour reprendre le projet sur n'importe quelle machi
 - **Débogage** :
   - après le rechargement de l'extension, rouvrir l'onglet, sinon le script de contenu orphelin reste actif ;
   - le script de contenu affiche l'horodatage de son build dans la console ;
-  - le service worker écrit des lignes `[SyncKai:sync]`.
+  - le service worker écrit des lignes `[SyncKai:sync]` ;
+  - logs info/debug visibles seulement avec `npm run build:dev` (ou `npm run dev`) ; `npm run build`/`package` ne gardent que warn/error.
 - **Point ouvert (mineur)** : une déconnexion pendant une requête `GET_WATCHING` peut remettre la liste en cache.
 
 ### Publication

@@ -1,6 +1,9 @@
 import { t } from '../../i18n';
 import type { AniListToken, AuthResult } from '../../shared/auth.types';
 import { saveToken } from '../../shared/storage';
+import { createLogger } from '../../shared/logger';
+
+const log = createLogger('auth');
 
 const ANILIST_CLIENT_ID = '52346';
 const ANILIST_AUTHORIZE_URL = 'https://anilist.co/api/v2/oauth/authorize';
@@ -22,7 +25,7 @@ export async function loginWithAniList(): Promise<AuthResult> {
     responseUrl = await chrome.identity.launchWebAuthFlow({ url: authUrl.toString(), interactive: true });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error('[SyncKai] launchWebAuthFlow a échoué :', message, '| redirect_uri :', redirectUri);
+    log.error('launchWebAuthFlow a échoué :', message, '| redirect_uri :', redirectUri);
 
     // Seul ce message correspond à une fermeture volontaire de la fenêtre par l'utilisateur
     if (/did not approve/i.test(message)) {
@@ -49,14 +52,14 @@ export async function loginWithAniList(): Promise<AuthResult> {
   const fragment = new URLSearchParams(url.hash.slice(1));
   const error = fragment.get('error') ?? url.searchParams.get('error');
   if (error) {
-    console.warn('[SyncKai] AniList a refusé l’accès :', error);
+    log.warn('AniList a refusé l’accès :', error);
     return { ok: false, code: 'ACCESS_DENIED', message: t('auth.denied', { service: 'AniList' }) };
   }
 
   const accessToken = fragment.get('access_token');
   const expiresIn = Number(fragment.get('expires_in'));
   if (!accessToken || !Number.isFinite(expiresIn) || expiresIn <= 0) {
-    console.error('[SyncKai] Réponse OAuth invalide :', url.origin + url.pathname);
+    log.error('Réponse OAuth invalide :', url.origin + url.pathname);
     return { ok: false, code: 'INVALID_RESPONSE', message: t('auth.invalidResponse.anilist') };
   }
 
@@ -64,7 +67,7 @@ export async function loginWithAniList(): Promise<AuthResult> {
   try {
     await saveToken(token);
   } catch (storageError: unknown) {
-    console.error('[SyncKai] Échec de la sauvegarde du token :', storageError);
+    log.error('Échec de la sauvegarde du token :', storageError);
     return { ok: false, code: 'UNKNOWN', message: t('auth.saveFailed') };
   }
 

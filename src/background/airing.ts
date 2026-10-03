@@ -17,6 +17,7 @@ import { getSettings } from '../shared/settings';
 import { getCachedWatching, getMalToken, getValidToken, withStorageLock } from '../shared/storage';
 import { choosePlatformLink } from '../shared/watching';
 import type { WatchingEntry } from '../shared/watching.types';
+import { createLogger } from '../shared/logger';
 
 // Alertes de sortie : une alarme horaire interroge le calendrier public AniList pour les séries en cours.
 
@@ -27,7 +28,7 @@ const NOTIFIED_KEY = 'airingNotified';
 /** notificationId → mediaIds à ouvrir au clic (le service worker peut s'endormir entre-temps) */
 const TARGETS_KEY = 'airingTargets';
 const MAX_TARGETS = 20;
-const LOG = '[SyncKai:airing]';
+const log = createLogger('airing');
 
 const AIRING_QUERY = `
 query ($ids: [Int], $from: Int, $to: Int) {
@@ -95,7 +96,7 @@ export async function ensureAiringAlarm(): Promise<void> {
     const existing = await chrome.alarms.get(AIRING_ALARM);
     if (!existing) chrome.alarms.create(AIRING_ALARM, { delayInMinutes: 1, periodInMinutes: 60 });
   } catch (error) {
-    console.error(LOG, 'Alarme impossible à configurer :', error);
+    log.error('Alarme impossible à configurer :', error);
   }
 }
 
@@ -136,7 +137,7 @@ async function runCheck(): Promise<{ notified: number; skipped: AiringSkipReason
     if (entry.mediaId === null || excluded.some((ex) => matchesExclusion(ex, { mediaId: entry.mediaId }))) continue;
     progressByMedia.set(entry.mediaId, Math.max(entry.progress, progressByMedia.get(entry.mediaId) ?? 0));
   }
-  console.info(LOG, `${progressByMedia.size} série(s) en cours à vérifier`);
+  log.info(`${progressByMedia.size} série(s) en cours à vérifier`);
   if (progressByMedia.size === 0) return { notified: 0, skipped: 'no-series' };
 
   const stored = await chrome.storage.local.get(LAST_CHECK_KEY);
@@ -144,7 +145,7 @@ async function runCheck(): Promise<{ notified: number; skipped: AiringSkipReason
   const nowS = Math.floor(Date.now() / 1000);
   const range = computeWindow(nowS, typeof lastCheck === 'number' ? lastCheck : null, settings.airingDelayHours);
   const items = await fetchAiring([...progressByMedia.keys()], range.from, range.to);
-  console.info(LOG, `${items.length} diffusion(s) trouvée(s) dans la fenêtre`);
+  log.info(`${items.length} diffusion(s) trouvée(s) dans la fenêtre`);
 
   // Liste des épisodes déjà notifiés lue/écrite sous verrou : alarme et vérification manuelle ne doublonnent pas
   const fresh = await withStorageLock(async () => {
@@ -185,20 +186,20 @@ async function runCheck(): Promise<{ notified: number; skipped: AiringSkipReason
  * Ne lève jamais ; le résumé est aussi enregistré sous `airingLastResult` pour le popup.
  */
 export async function checkNewEpisodes(): Promise<AiringCheckResult> {
-  console.info(LOG, 'Début de la vérification des sorties');
+  log.info('Début de la vérification des sorties');
   let result: AiringCheckResult;
   try {
     const { notified, skipped } = await runCheck();
     result = { checkedAt: Date.now(), notified, skipped, error: null };
   } catch (error) {
-    console.error(LOG, 'Vérification des sorties impossible :', error);
+    log.error('Vérification des sorties impossible :', error);
     result = { checkedAt: Date.now(), notified: 0, skipped: null, error: describeError(error) };
   }
-  console.info(LOG, 'Fin de la vérification :', result.error ? 'échec' : result.skipped ? `ignorée (${result.skipped})` : `${result.notified} notification(s)`);
+  log.info('Fin de la vérification :', result.error ? 'échec' : result.skipped ? `ignorée (${result.skipped})` : `${result.notified} notification(s)`);
   try {
     await chrome.storage.local.set({ [AIRING_RESULT_KEY]: result });
   } catch (error) {
-    console.error(LOG, 'Enregistrement du résumé impossible :', error);
+    log.error('Enregistrement du résumé impossible :', error);
   }
   return result;
 }
@@ -225,7 +226,7 @@ async function openFromNotification(notificationId: string): Promise<void> {
     if (mediaId === undefined) return;
     await chrome.tabs.create({ url: await resolveUrl(mediaId) });
   } catch (error) {
-    console.error(LOG, 'Ouverture impossible :', error);
+    log.error('Ouverture impossible :', error);
   }
 }
 

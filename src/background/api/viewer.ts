@@ -4,6 +4,9 @@ import { saveCachedViewer } from '../../shared/storage';
 import { toSafeUrl } from '../../shared/url';
 import { anilistQuery } from './client';
 import { ApiError } from './errors';
+import { createLogger } from '../../shared/logger';
+
+const log = createLogger('anilist');
 
 const VIEWER_QUERY = /* GraphQL */ `
   query Viewer {
@@ -32,7 +35,7 @@ export async function getViewer(): Promise<ViewerResult> {
     if (error instanceof ApiError) {
       return { ok: false, code: error.code, message: error.message };
     }
-    console.error('[SyncKai] Erreur inattendue (getViewer) :', error);
+    log.error('Erreur inattendue (getViewer) :', error);
     return { ok: false, code: 'API_ERROR', message: t('api.profileLoadFailed') };
   }
 }

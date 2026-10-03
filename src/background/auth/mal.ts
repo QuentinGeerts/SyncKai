@@ -5,6 +5,9 @@ import type { MalToken } from '../../shared/mal.types';
 import { clearMalSession, getMalToken, saveMalToken } from '../../shared/storage';
 import { ApiError } from '../api/errors';
 import { createCodeVerifier, createState } from './pkce';
+import { createLogger } from '../../shared/logger';
+
+const log = createLogger('auth');
 
 /** Client public (type "other" sur MAL) : PKCE, aucun secret embarqué dans l'extension */
 const MAL_CLIENT_ID = '84d05521c007a529cc458421bd0940c5';
@@ -75,7 +78,7 @@ export async function loginWithMal(): Promise<AuthResult> {
     responseUrl = await chrome.identity.launchWebAuthFlow({ url: authUrl.toString(), interactive: true });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error('[SyncKai] Connexion MyAnimeList interrompue :', message, '| redirect_uri :', redirectUri);
+    log.error('Connexion MyAnimeList interrompue :', message, '| redirect_uri :', redirectUri);
     if (/did not approve/i.test(message)) return { ok: false, code: 'USER_CANCELLED', message: t('auth.cancelled') };
     if (/could not be loaded/i.test(message)) {
       return {
@@ -90,7 +93,7 @@ export async function loginWithMal(): Promise<AuthResult> {
 
   const params = new URL(responseUrl).searchParams;
   if (params.get('error')) {
-    console.warn('[SyncKai] MyAnimeList a refusé l’accès :', params.get('error'));
+    log.warn('MyAnimeList a refusé l’accès :', params.get('error'));
     return { ok: false, code: 'ACCESS_DENIED', message: t('auth.denied', { service: 'MyAnimeList' }) };
   }
   const code = params.get('code');
@@ -104,7 +107,7 @@ export async function loginWithMal(): Promise<AuthResult> {
     await saveMalToken(token);
     return { ok: true, data: null };
   } catch (error: unknown) {
-    console.error('[SyncKai] Échange du code MyAnimeList impossible :', error);
+    log.error('Échange du code MyAnimeList impossible :', error);
     return { ok: false, code: 'UNKNOWN', message: error instanceof ApiError ? error.message : t('auth.finalizeFailed') };
   }
 }

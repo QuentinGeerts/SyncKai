@@ -88,7 +88,8 @@ Prérequis : Node.js 20+ et Chrome.
 ```bash
 npm install       # dépendances
 npm run dev       # build de développement (Vite + @crxjs/vite-plugin)
-npm run build     # vérification TypeScript + build dans dist/
+npm run build     # vérification TypeScript + build de production dans dist/ (console : warn/error)
+npm run build:dev # même build avec les journaux détaillés (info/debug) dans la console
 npm test          # tests unitaires (Vitest)
 ```
 

@@ -3,6 +3,12 @@
 Toutes les évolutions notables de SyncKai sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions selon [SemVer](https://semver.org/lang/fr/).
 
+## [Unreleased]
+
+### Modifié
+
+- Console silencieuse en production : seuls les avertissements et erreurs sont affichés ; les journaux détaillés sont réservés aux builds de développement (`npm run build:dev`).
+
 ## [1.7.2] - 2026-10-01
 
 ### Corrigé

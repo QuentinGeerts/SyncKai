@@ -61,6 +61,9 @@ import {
   type UiState,
   type WatchingState,
 } from './state';
+import { createLogger } from '../shared/logger';
+
+const log = createLogger('popup');
 
 // Langue lue avant le premier rendu : toutes les vues sont construites directement dans la bonne langue
 await initI18n();
@@ -133,7 +136,7 @@ const reviewActions: ReviewActions = {
     try {
       return await sendMessage('SEARCH_ANIME', { query });
     } catch (error: unknown) {
-      console.error('[SyncKai] Service worker injoignable :', error);
+      log.error('Service worker injoignable :', error);
       return { ok: false, code: 'NETWORK', message: swUnreachable() };
     }
   },
@@ -141,7 +144,7 @@ const reviewActions: ReviewActions = {
     try {
       return await sendMessage('RESOLVE_REVIEW', { key, mediaId, progress });
     } catch (error: unknown) {
-      console.error('[SyncKai] Service worker injoignable :', error);
+      log.error('Service worker injoignable :', error);
       return { status: 'error', message: swUnreachable() };
     }
   },
@@ -207,7 +210,7 @@ async function savePrefs(): Promise<void> {
   try {
     await chrome.storage.local.set({ [PREFS_KEY]: { source, sort } satisfies PopupPrefs });
   } catch (error: unknown) {
-    console.warn('[SyncKai] Préférences du popup non enregistrées :', error);
+    log.warn('Préférences du popup non enregistrées :', error);
   }
 }
 
@@ -229,7 +232,7 @@ async function loadPrefs(): Promise<void> {
       sort: 'sort' in raw && isWatchingSort(raw.sort) ? raw.sort : DEFAULT_WATCHING_SORT,
     });
   } catch (error: unknown) {
-    console.warn('[SyncKai] Préférences du popup illisibles :', error);
+    log.warn('Préférences du popup illisibles :', error);
   }
 }
 
@@ -504,7 +507,7 @@ async function refreshAccount(service: TrackerId): Promise<void> {
   try {
     result = service === 'anilist' ? await sendMessage('GET_VIEWER', null) : await sendMessage('GET_MAL_VIEWER', null);
   } catch (error: unknown) {
-    console.error('[SyncKai] Service worker injoignable :', error);
+    log.error('Service worker injoignable :', error);
     result = { ok: false, code: 'NETWORK', message: swUnreachable() };
   }
 
@@ -543,12 +546,12 @@ async function login(service: TrackerId): Promise<void> {
   try {
     result = await sendMessage(service === 'anilist' ? 'LOGIN_ANILIST' : 'LOGIN_MAL', null);
   } catch (error: unknown) {
-    console.error('[SyncKai] Service worker injoignable :', error);
+    log.error('Service worker injoignable :', error);
     result = { ok: false, code: 'UNKNOWN', message: swUnreachable() };
   }
 
   if (!result.ok) {
-    console.warn(`[SyncKai] Échec de connexion ${TRACKER_LABELS[service]} :`, result.code, result.message);
+    log.warn(`Échec de connexion ${TRACKER_LABELS[service]} :`, result.code, result.message);
     store.set({ status: 'logged-out', pending: false, error: result.message, expired });
     return;
   }
@@ -573,7 +576,7 @@ async function logout(service: TrackerId): Promise<void> {
     await clearUserDataIfLastService();
     store.set(LOGGED_OUT);
   } catch (error: unknown) {
-    console.error(`[SyncKai] Échec de la déconnexion ${TRACKER_LABELS[service]} :`, error);
+    log.error(`Échec de la déconnexion ${TRACKER_LABELS[service]} :`, error);
     const current = store.get();
     if (current.status === 'logged-in') store.set({ ...current, error: t('popup.logoutFailed') });
   }
@@ -597,7 +600,7 @@ async function bootstrap(service: TrackerId): Promise<void> {
     await loadCachedViewer(service);
     await refreshAccount(service);
   } catch (error: unknown) {
-    console.error('[SyncKai] Lecture du stockage impossible :', error);
+    log.error('Lecture du stockage impossible :', error);
     store.set({ ...LOGGED_OUT, error: t('popup.sessionReadFailed') });
   }
 }
@@ -629,7 +632,7 @@ async function loadWatching(service: TrackerId): Promise<void> {
   try {
     result = await sendMessage('GET_WATCHING', { service });
   } catch (error: unknown) {
-    console.error('[SyncKai] Service worker injoignable :', error);
+    log.error('Service worker injoignable :', error);
     result = { ok: false, code: 'NETWORK', message: swUnreachable() };
   }
   if (request !== watchingRequest) return;
@@ -711,7 +714,7 @@ async function adjustProgress(entry: WatchingEntry, delta: 1 | -1): Promise<void
   try {
     outcome = await sendMessage('ADJUST_PROGRESS', { mediaId: entry.mediaId, malId: entry.malId, delta });
   } catch (error: unknown) {
-    console.error('[SyncKai] Service worker injoignable :', error);
+    log.error('Service worker injoignable :', error);
     outcome = { status: 'error', message: swUnreachable() };
   }
   patchWatchingProgress(entry, outcome);
@@ -728,7 +731,7 @@ async function excludeEntry(entry: WatchingEntry): Promise<void> {
     await excludeSeries({ platformKey: null, mediaId: entry.mediaId, label: entry.title });
     flashEntryFeedback(key, { tone: 'info', text: t('popup.syncDisabled'), detail: t('popup.syncDisabledDetail') });
   } catch (error: unknown) {
-    console.error('[SyncKai] Exclusion de la série impossible :', error);
+    log.error('Exclusion de la série impossible :', error);
     flashEntryFeedback(key, errorFeedback(t('popup.excludeFailed')));
   }
   await loadExclusions();
@@ -743,7 +746,7 @@ async function includeEntry(entry: WatchingEntry): Promise<void> {
     for (const match of matches) await includeSeries(match.id);
     flashEntryFeedback(key, { tone: 'success', text: t('popup.syncEnabled'), detail: t('popup.syncEnabledDetail') });
   } catch (error: unknown) {
-    console.error('[SyncKai] Réactivation de la série impossible :', error);
+    log.error('Réactivation de la série impossible :', error);
     flashEntryFeedback(key, errorFeedback(t('popup.includeFailed')));
   }
   await loadExclusions();
@@ -770,7 +773,7 @@ async function excludeRecent(sync: RecentSync): Promise<void> {
   try {
     await excludeSeries({ platformKey: platformSeriesKey(sync.episode), mediaId: sync.mediaId, label: sync.episode.animeTitle });
   } catch (e: unknown) {
-    console.error('[SyncKai] Exclusion de la série impossible :', e);
+    log.error('Exclusion de la série impossible :', e);
     error = t('common.excludeFailed');
   }
   syncStore.set({ ...syncStore.get(), recentError: error });
@@ -781,7 +784,7 @@ async function loadExclusions(): Promise<void> {
   try {
     exclusionsStore.set({ status: 'ready', items: await getExcludedSeries() });
   } catch (error: unknown) {
-    console.error('[SyncKai] Lecture des séries exclues impossible :', error);
+    log.error('Lecture des séries exclues impossible :', error);
     exclusionsStore.set({ status: 'error' });
   }
 }
@@ -811,7 +814,7 @@ async function retryQueued(id: string): Promise<void> {
   try {
     outcome = await sendMessage('RETRY_QUEUED', { id });
   } catch (error: unknown) {
-    console.error('[SyncKai] Service worker injoignable :', error);
+    log.error('Service worker injoignable :', error);
     outcome = { status: 'error', message: swUnreachable() };
   }
   setQueueBusy(id, false);
@@ -826,7 +829,7 @@ async function abandonQueued(id: string): Promise<void> {
   try {
     await removeQueueItem(id);
   } catch (e: unknown) {
-    console.error('[SyncKai] Suppression de la synchro en attente impossible :', e);
+    log.error('Suppression de la synchro en attente impossible :', e);
     error = t('popup.abandonFailed');
   }
   setQueueBusy(id, false);
@@ -839,7 +842,7 @@ async function loadQueue(): Promise<void> {
     const items = await getSyncQueue();
     queueStore.set({ ...queueStore.get(), items, error: null });
   } catch (error: unknown) {
-    console.error('[SyncKai] Lecture de la file de synchro impossible :', error);
+    log.error('Lecture de la file de synchro impossible :', error);
     queueStore.set({ ...queueStore.get(), error: t('popup.queueReadFailed') });
   }
 }
@@ -873,7 +876,7 @@ async function rateMedia(item: PendingRating, value: number): Promise<void> {
   try {
     outcome = await sendMessage('RATE_MEDIA', { media: { mediaId: item.mediaId, malId: item.malId, title: item.title }, score: value });
   } catch (error: unknown) {
-    console.error('[SyncKai] Service worker injoignable :', error);
+    log.error('Service worker injoignable :', error);
     outcome = { status: 'error', message: swUnreachable() };
   }
   const feedback = ratingFeedback(outcome, formatStarValue(value), item.title);
@@ -893,7 +896,7 @@ async function ignoreRating(item: PendingRating): Promise<void> {
     await removePendingRating(item.id);
     patchRatings({ error: null });
   } catch (error: unknown) {
-    console.error('[SyncKai] Suppression de la note en attente impossible :', error);
+    log.error('Suppression de la note en attente impossible :', error);
     patchRatings({ error: t('popup.ignoreFailed') });
   }
 }
@@ -906,7 +909,7 @@ async function loadRatings(): Promise<void> {
     const busy = current.items.filter((i) => current.busyIds.has(i.id) && !items.some((n) => n.id === i.id));
     patchRatings({ items: [...busy, ...items], error: null });
   } catch (error: unknown) {
-    console.error('[SyncKai] Lecture des notes en attente impossible :', error);
+    log.error('Lecture des notes en attente impossible :', error);
     patchRatings({ error: t('popup.ratingsReadFailed') });
   }
 }
@@ -922,7 +925,7 @@ async function handleCorrect(key: string): Promise<void> {
     if (!result.ok) error = result.message;
     else navigate('activity');
   } catch (e: unknown) {
-    console.error('[SyncKai] Service worker injoignable :', e);
+    log.error('Service worker injoignable :', e);
     error = swUnreachable();
   }
   syncStore.set({ ...syncStore.get(), busyKey: null, recentError: error });
@@ -937,7 +940,7 @@ async function loadSettings(): Promise<void> {
   try {
     settingsStore.set({ status: 'ready', settings: await getSettings() });
   } catch (error: unknown) {
-    console.error('[SyncKai] Lecture des réglages impossible :', error);
+    log.error('Lecture des réglages impossible :', error);
     settingsStore.set({ status: 'error' });
   }
 }
@@ -1003,7 +1006,7 @@ async function loadAiringResult(): Promise<void> {
     const stored = await chrome.storage.local.get(AIRING_RESULT_KEY);
     setAiringResult(stored[AIRING_RESULT_KEY]);
   } catch (error: unknown) {
-    console.warn('[SyncKai] Lecture du résumé des alertes impossible :', error);
+    log.warn('Lecture du résumé des alertes impossible :', error);
   }
 }
 

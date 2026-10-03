@@ -5,6 +5,9 @@ import { h, nodes, preserveFocus, type Child } from '../ui/dom';
 import { icon, kai } from '../ui/icons';
 import { renderAlert } from '../popup/components/alert';
 import { BTN_GHOST, BTN_PRIMARY, CARD } from '../popup/components/ui';
+import { createLogger } from '../shared/logger';
+
+const log = createLogger('import');
 
 // Page d'import ouverte dans un onglet depuis Réglages › Sauvegarde (le sélecteur de fichier fermerait le popup).
 
@@ -54,7 +57,7 @@ async function onFile(file: File | undefined): Promise<void> {
     }
     setState({ kind: 'ready', fileName: file.name, parsed: result.data, mode: 'merge', includeSettings: false, confirming: false, applying: false, error: null });
   } catch (error: unknown) {
-    console.error('[SyncKai] Lecture du fichier impossible :', error);
+    log.error('Lecture du fichier impossible :', error);
     setState({ kind: 'idle', error: t('import.readFailed') });
   }
 }
@@ -67,7 +70,7 @@ async function runImport(): Promise<void> {
     await applyBackup(current.parsed.backup.data, current.mode, current.includeSettings);
     setState({ kind: 'done' });
   } catch (error: unknown) {
-    console.error('[SyncKai] Import impossible :', error);
+    log.error('Import impossible :', error);
     setState({ ...current, applying: false, confirming: false, error: t('import.failed') });
   }
 }

@@ -17,6 +17,9 @@ import { anilistPublicQuery, anilistQuery } from './client';
 import { ApiError } from './errors';
 import { malRequest } from './mal';
 import { getViewer } from './viewer';
+import { createLogger } from '../../shared/logger';
+
+const log = createLogger('watching');
 
 // ─── Parsing défensif ─────────────────────────────────────────────────────
 
@@ -192,7 +195,7 @@ async function fetchCatalogByMalIds(malIds: readonly number[]): Promise<Map<numb
       }
     }
   } catch (error: unknown) {
-    console.warn('[SyncKai] Catalogue AniList indisponible pour la liste MyAnimeList :', error);
+    log.warn('Catalogue AniList indisponible pour la liste MyAnimeList :', error);
   }
   return catalog;
 }
@@ -246,7 +249,7 @@ export async function getWatchingList(service: TrackerId): Promise<WatchingResul
     return { ok: true, data: list };
   } catch (error: unknown) {
     if (error instanceof ApiError) return { ok: false, code: error.code, message: error.message };
-    console.error('[SyncKai] Erreur inattendue (getWatchingList) :', error);
+    log.error('Erreur inattendue (getWatchingList) :', error);
     return { ok: false, code: 'API_ERROR', message: t('api.listLoadFailed') };
   }
 }

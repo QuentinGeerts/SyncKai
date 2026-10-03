@@ -7,6 +7,9 @@ import { getMalAccessToken } from '../auth/mal';
 import type { ListEntryState, ListStatus, WriteStatus } from '../sync/rules';
 import { ApiError } from './errors';
 import { retryDelayMs, sleep } from './rate-limit';
+import { createLogger } from '../../shared/logger';
+
+const log = createLogger('mal');
 
 const MAL_API_URL = 'https://api.myanimelist.net/v2';
 
@@ -92,7 +95,7 @@ export async function malRequest<T>(path: string, isData: (data: unknown) => dat
   if (response.status === 429) {
     const delay = options.rateRetried ? null : retryDelayMs(response.headers.get('Retry-After'));
     if (delay !== null) {
-      console.warn(`[SyncKai] Limite de requêtes MyAnimeList atteinte, nouvelle tentative dans ${Math.ceil(delay / 1000)} s`);
+      log.warn(`Limite de requêtes MyAnimeList atteinte, nouvelle tentative dans ${Math.ceil(delay / 1000)} s`);
       await sleep(delay);
       return malRequest(path, isData, { ...options, rateRetried: true });
     }
@@ -101,7 +104,7 @@ export async function malRequest<T>(path: string, isData: (data: unknown) => dat
 
   if (response.status === 404) throw new ApiError('API_ERROR', t('api.malNotFound'));
   if (!response.ok) {
-    console.error('[SyncKai] Erreur API MyAnimeList :', response.status);
+    log.error('Erreur API MyAnimeList :', response.status);
     throw new ApiError('API_ERROR', t('api.httpError', { service: 'MyAnimeList', status: response.status }));
   }
 
@@ -112,7 +115,7 @@ export async function malRequest<T>(path: string, isData: (data: unknown) => dat
     // traité ci-dessous
   }
   if (!isData(body)) {
-    console.error('[SyncKai] Réponse MyAnimeList inattendue :', body);
+    log.error('Réponse MyAnimeList inattendue :', body);
     throw new ApiError('INVALID_RESPONSE', t('api.invalidResponse.mal'));
   }
   return body;
@@ -143,7 +146,7 @@ export async function getMalViewer(): Promise<MalViewerResult> {
     return { ok: true, data: viewer };
   } catch (error: unknown) {
     if (error instanceof ApiError) return { ok: false, code: error.code, message: error.message };
-    console.error('[SyncKai] Erreur inattendue (getMalViewer) :', error);
+    log.error('Erreur inattendue (getMalViewer) :', error);
     return { ok: false, code: 'API_ERROR', message: t('api.profileLoadFailed') };
   }
 }

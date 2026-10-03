@@ -1,6 +1,6 @@
 import type { EpisodeInfo } from '../../shared/episode.types';
 import { isRecord } from '../../shared/guards';
-import { createLogger } from '../lib/logger';
+import { createLogger } from '../../shared/logger';
 import { cleanText, createLabelGuard, labelKey, readJsonLdNodes, toNumber } from './parsing';
 import type { StreamingAdapter } from './adapter';
 

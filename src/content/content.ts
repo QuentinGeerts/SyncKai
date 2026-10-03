@@ -3,7 +3,7 @@ import { isContentMessage } from '../shared/content-messages';
 import type { StreamingAdapter } from './adapters/adapter';
 import { adnAdapter } from './adapters/adn';
 import { crunchyrollAdapter } from './adapters/crunchyroll';
-import { createLogger } from './lib/logger';
+import { createLogger } from '../shared/logger';
 import { watchUrl } from './lib/url-watcher';
 import { startWatchSession, type WatchSession } from './lib/watch-session';
 

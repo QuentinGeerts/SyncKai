@@ -10,7 +10,7 @@ import { showEngagementPrompt } from '../ui/engagement-prompt';
 import { isAlertTone, promptForOutcome, showsProgress } from '../ui/notification-policy';
 import { ALERT_TOAST_MS, RETRY_TOAST_MS, bubbleForOutcome, toastForOutcome } from '../ui/sync-toast';
 import { showToast, type ToastContent, type ToastOptions } from '../ui/toast';
-import { createLogger } from './logger';
+import { createLogger } from '../../shared/logger';
 import { trackVideoProgress } from './video-tracker';
 import { waitFor } from './wait-for';
 

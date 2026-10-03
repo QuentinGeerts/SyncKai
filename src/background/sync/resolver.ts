@@ -15,6 +15,9 @@ import {
   type MediaCandidate,
   type ResolveResult,
 } from './matching';
+import { createLogger } from '../../shared/logger';
+
+const log = createLogger('sync');
 
 const FRANCHISE_RELATIONS: ReadonlySet<string> = new Set(['SEQUEL', 'PREQUEL']);
 /** Limite les requêtes supplémentaires pour récupérer les saisons absentes de la recherche */
@@ -142,8 +145,8 @@ export async function resolveEpisode(episode: EpisodeInfo): Promise<EpisodeResol
   const collected = await collectCandidates(episode);
   const { candidates } = collected;
   // Diagnostic : fiches retenues comme appartenant à la série (les autres résultats de recherche sont omis)
-  console.info(
-    '[SyncKai:sync] Fiches liées :',
+  log.info(
+    'Fiches liées :',
     candidates
       .filter((c) => c.link !== null)
       .map((c) => `#${c.id} ${c.format ?? '?'} ${c.episodes ?? '?'} ép. ${c.startDate ?? '?'} « ${c.titles[0] ?? '?'} » (${c.link})`),

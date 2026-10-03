@@ -1,5 +1,5 @@
 import { canComplete, formatTimecode, resolveCompletionPoint } from './completion';
-import type { Logger } from './logger';
+import type { Logger } from '../../shared/logger';
 
 interface VideoTrackerOptions {
   /** Seuil de repli (0 à 1) si le début du générique de fin est inconnu */
@@ -48,7 +48,7 @@ export function trackVideoProgress(video: HTMLVideoElement, options: VideoTracke
     const decile = Math.floor((currentTime / duration) * 10);
     if (decile !== lastLoggedDecile) {
       lastLoggedDecile = decile;
-      logger.info(`Progression : ${Math.round((currentTime / duration) * 100)} % (${formatTimecode(currentTime)})`);
+      logger.debug(`Progression : ${Math.round((currentTime / duration) * 100)} % (${formatTimecode(currentTime)})`);
     }
 
     if (currentTime < point.seconds) seenBeforePoint = true;

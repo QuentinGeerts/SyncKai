@@ -6,6 +6,9 @@ import type { SyncOutcome } from '../../shared/sync.types';
 import { h, nodes, preserveFocus } from '../../ui/dom';
 import { icon, warnIcon } from '../../ui/icons';
 import { BTN_GHOST, BTN_PRIMARY, PLATFORM_LABELS, renderCover } from './ui';
+import { createLogger } from '../../shared/logger';
+
+const log = createLogger('popup');
 
 export interface ReviewActions {
   search(query: string): Promise<Result<CandidateSummary[], string>>;
@@ -326,7 +329,7 @@ export function createReviewCard(initial: PendingReview, actions: ReviewActions,
     try {
       await actions.dismiss(review.key);
     } catch (error: unknown) {
-      console.error('[SyncKai] Impossible d’ignorer la vérification :', error);
+      log.error('Impossible d’ignorer la vérification :', error);
       feedback = { tone: 'error', title: t('common.actionFailed'), message: t('review.dismissFailed') };
       render();
     }
@@ -336,7 +339,7 @@ export function createReviewCard(initial: PendingReview, actions: ReviewActions,
     try {
       await actions.exclude(review);
     } catch (error: unknown) {
-      console.error('[SyncKai] Impossible d’exclure la série :', error);
+      log.error('Impossible d’exclure la série :', error);
       feedback = { tone: 'error', title: t('common.actionFailed'), message: t('common.excludeFailed') };
       render();
     }

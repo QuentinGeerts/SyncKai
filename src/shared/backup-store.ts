@@ -1,6 +1,9 @@
 import { refreshReviewBadge } from './badge';
 import { BACKUP_STORAGE_KEYS, buildBackup, mergeBackup, sectionsFromStorage, type Backup, type BackupData, type ImportMode } from './backup';
 import { withStorageLock } from './storage';
+import { createLogger } from './logger';
+
+const log = createLogger('backup');
 
 // Lecture / écriture des sauvegardes dans chrome.storage.local (popup et page d'import).
 
@@ -31,5 +34,5 @@ export async function applyBackup(incoming: BackupData, mode: ImportMode, includ
     });
   });
   // Badge décoratif : son échec ne remet pas l'import en cause
-  await refreshReviewBadge().catch((error: unknown) => console.warn('[SyncKai] Badge non mis à jour après import :', error));
+  await refreshReviewBadge().catch((error: unknown) => log.warn('Badge non mis à jour après import :', error));
 }

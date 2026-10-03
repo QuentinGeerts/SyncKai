@@ -7,13 +7,14 @@ import type { SyncOutcome } from '../../shared/sync.types';
 import type { TrackerId } from '../../shared/tracker.types';
 import { classifyOutcome, decideAfterRetry, dueItems, nextAlarmTime, upsertFailure, withoutServices } from './queue-policy';
 import { syncEpisode } from './sync-service';
+import { createLogger } from '../../shared/logger';
 
 // File de synchro hors ligne (service worker).
 
 /** Nom de l'alarme chrome.alarms qui relance la file (n'existe que si la file contient un élément pending) */
 export const QUEUE_ALARM = 'synckai:sync-queue';
 
-const LOG_PREFIX = '[SyncKai:queue]';
+const log = createLogger('queue');
 const RUN_LOCK = 'synckai:sync-queue-run';
 /** Pause entre deux relances : évite de solliciter les API en rafale */
 const ITEM_DELAY_MS = 1_000;
@@ -42,7 +43,7 @@ async function refreshBadgeSafely(): Promise<void> {
   try {
     await refreshReviewBadge();
   } catch (error: unknown) {
-    console.warn(LOG_PREFIX, 'Badge non mis à jour :', error);
+    log.warn('Badge non mis à jour :', error);
   }
 }
 
@@ -80,7 +81,7 @@ export async function recordSyncOutcome(
     await refreshBadgeSafely();
     return queued ? markQueued(outcome) : outcome;
   } catch (error: unknown) {
-    console.error(LOG_PREFIX, 'Mise en file impossible :', error);
+    log.error('Mise en file impossible :', error);
     return outcome;
   }
 }
@@ -100,7 +101,7 @@ async function retryItem(id: string, manual: boolean): Promise<SyncOutcome | nul
       return outcome;
     }
     await saveQueueItem(decision.item);
-    if (decision.item.status === 'failed') console.warn(LOG_PREFIX, 'Synchro abandonnée :', id, decision.item.lastError);
+    if (decision.item.status === 'failed') log.warn('Synchro abandonnée :', id, decision.item.lastError);
     return decision.item.status === 'pending' ? markQueued(outcome) : outcome;
   });
 }
@@ -117,17 +118,17 @@ export async function processSyncQueue(): Promise<void> {
         try {
           await retryItem(item.id, false);
         } catch (error: unknown) {
-          console.error(LOG_PREFIX, 'Relance en échec :', item.id, error);
+          log.error('Relance en échec :', item.id, error);
         }
       }
     });
   } catch (error: unknown) {
-    console.error(LOG_PREFIX, 'Traitement de la file impossible :', error);
+    log.error('Traitement de la file impossible :', error);
   }
   try {
     await scheduleAlarm();
   } catch (error: unknown) {
-    console.error(LOG_PREFIX, 'Alarme non replanifiée :', error);
+    log.error('Alarme non replanifiée :', error);
   }
   await refreshBadgeSafely();
 }
@@ -138,13 +139,13 @@ export async function retryQueued(id: string): Promise<SyncOutcome> {
   try {
     outcome = (await retryItem(id, true)) ?? { status: 'error', message: t('queue.gone') };
   } catch (error: unknown) {
-    console.error(LOG_PREFIX, 'Réessai impossible :', id, error);
+    log.error('Réessai impossible :', id, error);
     outcome = { status: 'error', message: t('queue.retryFailed') };
   }
   try {
     await scheduleAlarm();
   } catch (error: unknown) {
-    console.error(LOG_PREFIX, 'Alarme non replanifiée :', error);
+    log.error('Alarme non replanifiée :', error);
   }
   await refreshBadgeSafely();
   return outcome;
@@ -155,7 +156,7 @@ export async function ensureQueueAlarm(): Promise<void> {
   try {
     await scheduleAlarm();
   } catch (error: unknown) {
-    console.error(LOG_PREFIX, 'Alarme non recréée :', error);
+    log.error('Alarme non recréée :', error);
   }
   await refreshBadgeSafely();
 }

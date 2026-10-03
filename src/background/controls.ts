@@ -8,10 +8,11 @@ import type { ListEntryState, WriteStatus } from './sync/rules';
 import { getCatalogMedia } from './sync/sync-service';
 import { getConnectedTrackers } from './trackers';
 import type { CatalogMedia, TrackerService } from './trackers/tracker';
+import { createLogger } from '../shared/logger';
 
 // Contrôles manuels (service worker) : +1 / −1 depuis le popup et raccourci « valider l'épisode ».
 
-const LOG_PREFIX = '[SyncKai:controls]';
+const log = createLogger('controls');
 
 /** Identifiant de la commande déclarée dans manifest.json (`commands`) */
 export const COMPLETE_EPISODE_COMMAND = 'complete-episode';
@@ -45,11 +46,11 @@ async function adjustOnService(tracker: TrackerService, id: number, fallbackTota
       return { result: { service: tracker.id, outcome: { status: 'skipped', reason: decision.reason } }, title: current.title };
     }
     const saved = await tracker.saveProgress(id, decision.progress, decision.status);
-    console.info(LOG_PREFIX, `${label} : ${current.title} → épisode ${saved.progress} (${saved.status}, ajustement ${delta > 0 ? '+1' : '−1'})`);
+    log.info(`${label} : ${current.title} → épisode ${saved.progress} (${saved.status}, ajustement ${delta > 0 ? '+1' : '−1'})`);
     const outcome: ServiceOutcome = { status: 'updated', progress: saved.progress, completed: saved.status === 'COMPLETED' };
     return { result: { service: tracker.id, outcome }, title: current.title };
   } catch (error: unknown) {
-    console.error(LOG_PREFIX, `${label} : échec de l’ajustement`, error);
+    log.error(`${label} : échec de l’ajustement`, error);
     const outcome: ServiceOutcome =
       error instanceof ApiError ? { status: 'error', message: error.message, code: error.code } : { status: 'error', message: t('error.unexpected') };
     return { result: { service: tracker.id, outcome }, title: null };
@@ -78,7 +79,7 @@ export async function adjustProgress(payload: AdjustProgressPayload): Promise<Sy
     return { status: 'synced', mediaTitle, results: adjusted.map((a) => a.result) };
   } catch (error: unknown) {
     if (error instanceof ApiError) return { status: 'error', message: error.message, code: error.code };
-    console.error(LOG_PREFIX, 'Erreur inattendue :', error);
+    log.error('Erreur inattendue :', error);
     return { status: 'error', message: t('error.unexpectedAdjust') };
   }
 }
@@ -98,6 +99,6 @@ export async function handleCommand(command: string): Promise<void> {
     const message: ContentMessage = { type: 'FORCE_COMPLETE' };
     await chrome.tabs.sendMessage(tab.id, message);
   } catch (error: unknown) {
-    if (!isNoReceiverError(error)) console.warn(LOG_PREFIX, 'Raccourci « valider l’épisode » :', error);
+    if (!isNoReceiverError(error)) log.warn('Raccourci « valider l’épisode » :', error);
   }
 }

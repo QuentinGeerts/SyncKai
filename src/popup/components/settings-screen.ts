@@ -17,6 +17,9 @@ import { icon } from '../../ui/icons';
 import type { AccountState, ExclusionsState, SettingsState } from '../state';
 import { renderAlert } from './alert';
 import { BTN_GHOST, CARD, LINK, sectionLabel, segmented, SERVICE_CHIPS, serviceAvatar } from './ui';
+import { createLogger } from '../../shared/logger';
+
+const log = createLogger('popup');
 
 const REPO_URL = 'https://github.com/Sync-Kai/SyncKai';
 const ISSUES_URL = 'https://github.com/Sync-Kai/SyncKai/issues';
@@ -321,7 +324,7 @@ export function createSettingsScreen(): SettingsScreen {
       // Réponse de secours du service worker : horodatage absent
       airingResult = { ...result, checkedAt: result.checkedAt || Date.now() };
     } catch (error: unknown) {
-      console.error('[SyncKai] Vérification des sorties impossible :', error);
+      log.error('Vérification des sorties impossible :', error);
       airingResult = { checkedAt: Date.now(), notified: 0, skipped: null, error: t('settings.airing.unavailable') };
     }
     airingNow = Date.now();
@@ -346,7 +349,7 @@ export function createSettingsScreen(): SettingsScreen {
       await saveSettings(settings);
       showStatus(true);
     } catch (error: unknown) {
-      console.error('[SyncKai] Enregistrement des réglages impossible :', error);
+      log.error('Enregistrement des réglages impossible :', error);
       showStatus(false);
     }
   }
@@ -596,7 +599,7 @@ export function createSettingsScreen(): SettingsScreen {
       const commands = await chrome.commands.getAll();
       shortcut = commands.find((c) => c.name === COMMAND_NAME)?.shortcut ?? '';
     } catch (error: unknown) {
-      console.warn('[SyncKai] Lecture du raccourci impossible :', error);
+      log.warn('Lecture du raccourci impossible :', error);
       shortcut = '';
     }
     drawForm();
@@ -650,7 +653,7 @@ export function createSettingsScreen(): SettingsScreen {
       // La liste est relue par le popup via storage.onChanged
       await includeSeries(id);
     } catch (error: unknown) {
-      console.error('[SyncKai] Réactivation de la série impossible :', error);
+      log.error('Réactivation de la série impossible :', error);
       exclusionsError = t('settings.exclusions.reactivateFailed');
     }
     reactivatingId = null;
@@ -792,7 +795,7 @@ export function createSettingsScreen(): SettingsScreen {
       await action();
       mappingsError = null;
     } catch (error: unknown) {
-      console.error('[SyncKai] Modification des correspondances impossible :', error);
+      log.error('Modification des correspondances impossible :', error);
       mappingsError = t('settings.mappings.saveFailed');
     }
     await refreshMappings();
@@ -860,7 +863,7 @@ export function createSettingsScreen(): SettingsScreen {
         drawBackup();
       }, EXPORTED_BADGE_MS);
     } catch (error: unknown) {
-      console.error('[SyncKai] Export de la sauvegarde impossible :', error);
+      log.error('Export de la sauvegarde impossible :', error);
       exportState = 'error';
     }
     drawBackup();
@@ -870,7 +873,7 @@ export function createSettingsScreen(): SettingsScreen {
     try {
       mappings = Object.entries(await getMediaMappings()).sort(([a], [b]) => a.localeCompare(b));
     } catch (error: unknown) {
-      console.error('[SyncKai] Lecture des correspondances impossible :', error);
+      log.error('Lecture des correspondances impossible :', error);
       mappingsError = t('settings.mappings.loadError');
     }
     if (mappings.length === 0) expanded = false;

@@ -26,8 +26,9 @@ import type { CatalogMedia, TrackerService } from '../trackers/tracker';
 import { mappingFromManualChoice, mappingKey, seasonLabel } from './matching';
 import { findReviewCandidates, resolveEpisode, toCandidateSummary } from './resolver';
 import { decideListUpdate } from './rules';
+import { createLogger } from '../../shared/logger';
 
-const LOG_PREFIX = '[SyncKai:sync]';
+const log = createLogger('sync');
 const MAX_SEARCH_RESULTS = 10;
 
 const SKIP_REASONS = {
@@ -37,16 +38,16 @@ const SKIP_REASONS = {
 /** Convertit une erreur en résultat affichable (les handlers de messages ne lèvent jamais). */
 function toErrorOutcome(error: unknown): SyncOutcome {
   if (error instanceof ApiError) {
-    console.error(LOG_PREFIX, error.code, error.message);
+    log.error(error.code, error.message);
     return { status: 'error', message: error.message, code: error.code };
   }
-  console.error(LOG_PREFIX, 'Erreur inattendue :', error);
+  log.error('Erreur inattendue :', error);
   return { status: 'error', message: t('error.unexpectedSync') };
 }
 
 function toErrorResult(error: unknown): { ok: false; code: AniListErrorCode; message: string } {
   if (error instanceof ApiError) return { ok: false, code: error.code, message: error.message };
-  console.error(LOG_PREFIX, 'Erreur inattendue :', error);
+  log.error('Erreur inattendue :', error);
   return { ok: false, code: 'API_ERROR', message: t('error.unexpected') };
 }
 
@@ -94,7 +95,7 @@ async function writeToService(
 
     const decision = decideListUpdate(current.entry, progress, current.episodes ?? catalog.episodes, isCorrection);
     if (decision.action === 'skip') {
-      console.info(LOG_PREFIX, `${label} : pas de mise à jour (${decision.reason})`, current);
+      log.info(`${label} : pas de mise à jour (${decision.reason})`, current);
       return {
         result: {
           service: tracker.id,
@@ -108,13 +109,13 @@ async function writeToService(
     }
 
     const saved = await tracker.saveProgress(id, decision.progress, decision.status, decision.repeat);
-    console.info(LOG_PREFIX, `✔ ${label} : ${current.title} → épisode ${saved.progress} (${saved.status})`);
+    log.info(`✔ ${label} : ${current.title} → épisode ${saved.progress} (${saved.status})`);
     return {
       result: { service: tracker.id, outcome: { status: 'updated', progress: saved.progress, completed: saved.status === 'COMPLETED' } },
       alreadyCompleted: false,
     };
   } catch (error: unknown) {
-    console.error(LOG_PREFIX, `${label} : échec`, error);
+    log.error(`${label} : échec`, error);
     return {
       result: {
         service: tracker.id,
@@ -141,7 +142,7 @@ async function buildPrompts(catalog: CatalogMedia, progress: number, writes: rea
     return prompts.rate || prompts.rewatch ? prompts : undefined;
   } catch (error: unknown) {
     // Demandes facultatives : un échec de lecture du stockage n'affecte pas la synchro
-    console.warn(LOG_PREFIX, 'Demandes après synchro indisponibles :', error);
+    log.warn('Demandes après synchro indisponibles :', error);
     return undefined;
   }
 }
@@ -192,7 +193,7 @@ export async function syncEpisode(episode: EpisodeInfo, only: readonly TrackerId
     if ((await getConnectedTrackers(only)).length === 0) return { status: 'not-connected' };
     // Série exclue côté plateforme (filet de sécurité : le content script vérifie déjà avant l'envoi)
     if (await isExcluded({ platformKey: platformSeriesKey(episode) })) {
-      console.info(LOG_PREFIX, 'Série exclue (plateforme) : rien n’est écrit', episode);
+      log.info('Série exclue (plateforme) : rien n’est écrit', episode);
       return { status: 'excluded', mediaTitle: episode.animeTitle };
     }
     const key = mappingKey(episode);
@@ -201,11 +202,11 @@ export async function syncEpisode(episode: EpisodeInfo, only: readonly TrackerId
     if (!result.ok || result.target.confidence === 'low') {
       // Fiche suggérée exclue : pas de carte de vérification pour une série que l'utilisateur ignore
       if (result.ok && (await isExcluded({ mediaId: result.target.mediaId }))) {
-        console.info(LOG_PREFIX, `Fiche suggérée ${result.target.mediaId} exclue : aucune vérification créée`);
+        log.info(`Fiche suggérée ${result.target.mediaId} exclue : aucune vérification créée`);
         return { status: 'excluded', mediaTitle: episode.animeTitle };
       }
       const reason = result.ok ? result.target.reason : result.reason;
-      console.warn(LOG_PREFIX, 'Correspondance incertaine :', reason, episode);
+      log.warn('Correspondance incertaine :', reason, episode);
       await queueReview({
         key,
         episode,
@@ -219,10 +220,10 @@ export async function syncEpisode(episode: EpisodeInfo, only: readonly TrackerId
     }
 
     const { target } = result;
-    console.info(LOG_PREFIX, `Fiche ${target.mediaId}, progression ${target.progress} : ${target.reason}`);
+    log.info(`Fiche ${target.mediaId}, progression ${target.progress} : ${target.reason}`);
     const catalog = await getCatalogMedia(target.mediaId);
     if (await isExcluded({ mediaId: target.mediaId })) {
-      console.info(LOG_PREFIX, `Fiche ${target.mediaId} exclue : rien n’est écrit`);
+      log.info(`Fiche ${target.mediaId} exclue : rien n’est écrit`);
       return { status: 'excluded', mediaTitle: catalog.title };
     }
     return await writeToServices(key, episode, catalog, target.progress, { only });
@@ -244,7 +245,7 @@ export async function resolveReview({ key, mediaId, progress }: ResolveReviewPay
     }
 
     await saveMediaMapping(key, { ...mapping, seriesLabel: seasonLabel(review.episode), mediaTitle: catalog.title });
-    console.info(LOG_PREFIX, `Correspondance manuelle enregistrée pour ${key} :`, mapping);
+    log.info(`Correspondance manuelle enregistrée pour ${key} :`, mapping);
     // Correction sur la fiche déjà utilisée : la valeur choisie remplace celle écrite (même plus basse)
     const isCorrection = review.previous?.mediaId === mediaId;
     return await writeToServices(key, review.episode, catalog, progress, { isCorrection });
