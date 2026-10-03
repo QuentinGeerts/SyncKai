@@ -7,7 +7,7 @@ export default defineConfig({
     __SYNCKAI_DEBUG__: JSON.stringify(true),
   },
   test: {
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'scripts/**/*.test.ts'],
     environment: 'node',
   },
 });

@@ -1,0 +1,101 @@
+name: Release
+
+# Un tag de version poussé (git push origin vx.y.z) publie la release GitHub
+# et envoie l'archive au Chrome Web Store (soumission pour examen, publication automatique après validation).
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+# Jamais deux publications en parallèle ; une publication en cours n'est pas interrompue
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  PUPPETEER_SKIP_DOWNLOAD: 'true'
+  # ID public de l'élément sur le Chrome Web Store
+  EXTENSION_ID: khokcmigioggannjoojambdgioigdceb
+
+jobs:
+  release:
+    name: GitHub + Chrome Web Store
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Version du tag = package.json = manifest.json
+        id: version
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          pkg_version="$(node -p "require('./package.json').version")"
+          manifest_version="$(node -p "require('./manifest.json').version")"
+          echo "Tag : $tag_version · package.json : $pkg_version · manifest.json : $manifest_version"
+          if [ "$tag_version" != "$pkg_version" ] || [ "$tag_version" != "$manifest_version" ]; then
+            echo "::error::Versions incohérentes (tag $tag_version, package.json $pkg_version, manifest.json $manifest_version)."
+            exit 1
+          fi
+          echo "version=$tag_version" >> "$GITHUB_OUTPUT"
+
+      - run: npm ci
+
+      - name: Tests
+        run: npx vitest run
+
+      # Types des scripts + build de production + release/synckai-<version>.zip (sans le champ key)
+      - name: Archive
+        run: npm run package
+
+      - name: Notes de version
+        run: node scripts/changelog-notes.ts "${{ steps.version.outputs.version }}" > notes.md
+
+      - name: Identifiants du Chrome Web Store
+        env:
+          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+          PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
+        run: |
+          missing=""
+          [ -n "$CLIENT_ID" ] || missing="$missing CWS_CLIENT_ID"
+          [ -n "$CLIENT_SECRET" ] || missing="$missing CWS_CLIENT_SECRET"
+          [ -n "$REFRESH_TOKEN" ] || missing="$missing CWS_REFRESH_TOKEN"
+          [ -n "$PUBLISHER_ID" ] || missing="$missing CWS_PUBLISHER_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::Secrets manquants :$missing (Settings › Secrets and variables › Actions, voir docs/STORE.md)."
+            exit 1
+          fi
+
+      # Le Store passe AVANT la release GitHub : s'il refuse l'archive (identifiants expirés,
+      # version déjà envoyée, examen en cours…), aucune release publique n'annonce une version
+      # absente du Store. Le tag peut alors être supprimé et repoussé après correction.
+      # Sans sous-commande, la CLI envoie l'archive puis la soumet (DEFAULT_PUBLISH : mise en ligne
+      # automatique dès la validation). Elle lit CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, PUBLISHER_ID.
+      - name: Chrome Web Store (envoi + soumission)
+        env:
+          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+          PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
+        run: >-
+          npx --yes chrome-webstore-upload-cli@4
+          --source "release/synckai-${{ steps.version.outputs.version }}.zip"
+          --extension-id "$EXTENSION_ID"
+
+      - name: Release GitHub
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME" "release/synckai-$VERSION.zip"
+          --title "SyncKai $VERSION"
+          --notes-file notes.md
+          --verify-tag

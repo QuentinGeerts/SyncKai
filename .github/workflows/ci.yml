@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+permissions:
+  contents: read
+
+# Un seul run par branche / PR : un nouveau push annule le précédent
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Puppeteer ne sert qu'aux captures du Store (npm run screenshots) : pas de navigateur à télécharger
+  PUPPETEER_SKIP_DOWNLOAD: 'true'
+
+jobs:
+  check:
+    name: Types, tests et build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Types (extension)
+        run: npx tsc --noEmit
+
+      - name: Types (scripts)
+        run: npx tsc --noEmit -p scripts
+
+      - name: Tests
+        run: npx vitest run
+
+      - name: Build
+        run: npm run build

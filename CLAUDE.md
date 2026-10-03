@@ -76,7 +76,7 @@ Section maintenue par Claude pour reprendre le projet sur n'importe quelle machi
   - la version est montée dans `manifest.json`, `package.json` et `package-lock.json` (`npm version x.y.z --no-git-tag-version`) ;
   - entrée dans le `CHANGELOG.md` (FR, Keep a Changelog) et commit `chore(release): x.y.z` ;
   - fast-forward sur `main`, tag annoté `vx.y.z` (« SyncKai x.y.z »), `develop` aligné, push ;
-  - `npm run package`, puis release GitHub avec le zip (`gh release create`).
+  - le push du tag déclenche `.github/workflows/release.yml` : archive, envoi et soumission au Chrome Web Store, release GitHub avec le zip (voir `docs/STORE.md` › 7).
 - **Organisation** : le travail est confié à des sous-agents spécialisés, avec un brief précis. La session principale orchestre, vérifie (`npx tsc --noEmit`, `npx vitest run`, `npm run build`), gère Git et fait le compte rendu.
 - L'utilisateur teste dans Chrome avant chaque merge important. Signale ce qui n'a pas été testé.
 

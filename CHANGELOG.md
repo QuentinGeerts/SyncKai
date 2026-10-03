@@ -5,6 +5,10 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), ver
 
 ## [Unreleased]
 
+### Ajouté
+
+- Intégration continue (GitHub Actions) et publication automatique sur le Chrome Web Store à chaque tag de version.
+
 ### Modifié
 
 - Console silencieuse en production : seuls les avertissements et erreurs sont affichés ; les journaux détaillés sont réservés aux builds de développement (`npm run build:dev`).
