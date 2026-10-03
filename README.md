@@ -47,13 +47,11 @@ Navigateur : Chrome 116 ou plus récent (et navigateurs basés sur Chromium).
 
 ### Chrome Web Store (recommandé)
 
-[Installer SyncKai depuis le Chrome Web Store](https://chromewebstore.google.com/detail/<bientôt>) *(bientôt disponible)*.
+[Installer SyncKai depuis le Chrome Web Store](https://chromewebstore.google.com/detail/synckai/khokcmigioggannjoojambdgioigdceb).
 
-### Installation manuelle
+### Installation depuis les sources
 
-1. Télécharge le fichier `.zip` de la dernière version sur la page [Releases](https://github.com/Sync-Kai/SyncKai/releases) et décompresse-le.
-2. Ouvre `chrome://extensions` et active le **mode développeur** (en haut à droite).
-3. Clique sur **Charger l’extension non empaquetée** et sélectionne le dossier décompressé.
+La connexion AniList / MyAnimeList n’est autorisée que pour l’identifiant de l’extension du Chrome Web Store : le zip des [Releases](https://github.com/Sync-Kai/SyncKai/releases) (sans clé) chargé à la main obtient un autre identifiant et ne peut pas se connecter. Pour une version de développement, compile le projet (voir [Contribuer](#contribuer)) : le `manifest.json` du dépôt conserve l’identifiant du Store.
 
 ## Prise en main
 
@@ -116,4 +114,4 @@ SyncKai n’est affilié ni à Crunchyroll, ni à ADN, ni à AniList, ni à MyAn
 - Rating prompt at series end, rewatch detection, new-episode alerts, backup export / import.
 - Interface in French, English and German.
 
-Install from the [Chrome Web Store](https://chromewebstore.google.com/detail/<bientôt>) (coming soon) or manually from the [Releases](https://github.com/Sync-Kai/SyncKai/releases) zip. No server, no analytics: see the [privacy policy](PRIVACY.md). Licensed under [MIT](LICENSE).
+Install from the [Chrome Web Store](https://chromewebstore.google.com/detail/synckai/khokcmigioggannjoojambdgioigdceb). No server, no analytics: see the [privacy policy](PRIVACY.md). Licensed under [MIT](LICENSE).

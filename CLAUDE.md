@@ -104,9 +104,9 @@ Section maintenue par Claude pour reprendre le projet sur n'importe quelle machi
 ### Publication
 
 - **Dépôt** : https://github.com/Sync-Kai/SyncKai (organisation `Sync-Kai`).
-- **Chrome Web Store** : élément `khokcmigioggannjoojambdgioigdceb`, visibilité « Non répertorié ». La 1.7.2 a été envoyée pour examen le 2026-10-01.
+- **Chrome Web Store** : élément `khokcmigioggannjoojambdgioigdceb`, visibilité « Non répertorié ». La 1.7.2 est publiée depuis le 2026-10-03 : https://chromewebstore.google.com/detail/synckai/khokcmigioggannjoojambdgioigdceb
   - Textes de la fiche : `docs/store/listing-{fr,en,de}.md`.
   - Onglet Confidentialité : `docs/store/permissions.md`.
   - Procédure : `docs/STORE.md`.
 - **Captures du Store** : `npm run screenshots` → `docs/store/screenshots/{fr,en,de}/`, en 1280×800. Le popup est rendu depuis `dist/` avec une fausse API chrome : lance `npm run build` avant.
-- **Prochaines étapes** : une fois l'extension approuvée, installer depuis le Store, retester les connexions et une synchro, puis passer en « Public ». Ensuite, nouvelles plateformes et langues (pt_BR, es_419, pl).
+- **Prochaines étapes** : installer depuis le Store, retester les connexions et une synchro, puis passer en « Public ». Ensuite, nouvelles plateformes et langues (pt_BR, es_419, pl).
